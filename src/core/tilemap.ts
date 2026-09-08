@@ -5,24 +5,28 @@ export const MIN_MAP_SIZE = 3;
 export const MAX_MAP_SIZE = 511;
 
 /**
- * 맵 크기는 홀수만 허용한다.
+ * 맵 크기는 4n+3 (3, 7, 11, 15, ...) 만 허용한다.
  *
- * 셀 기반 미로에서는 벽도 한 칸을 차지하므로 (벽, 통로, 벽, 통로, ... , 벽) 배치가
- * 딱 떨어지려면 2n+1 형태여야 한다. 짝수로 두면 반대쪽 끝에 두께 2짜리 벽이 남고,
- * 자동 생성기와 대칭 그리기에서도 한 줄이 계속 어긋난다.
+ * 두 가지 제약이 겹친 결과다.
+ *  1) 셀 기반 미로는 벽도 한 칸을 차지하므로 2n+1(홀수)이라야 통로와 벽이 딱 떨어진다.
+ *  2) 중앙을 포함한 2칸 간격 보호 격자가 바깥 테두리와 겹치면 안 된다.
+ *     크기가 4n+3일 때만 중앙 좌표 (w-1)/2 가 홀수가 되어 격자가 홀수 좌표에만
+ *     놓이고, 짝수 좌표인 테두리와 분리된다. (lattice.ts 참고)
  *
- * 짝수가 들어오면 위쪽 홀수로 올린다. 사용자가 입력한 크기보다 작아지지 않는 편이
+ * 값이 맞지 않으면 위쪽으로 올린다. 사용자가 입력한 크기보다 작아지지 않는 편이
  * 덜 놀랍기 때문이다.
  */
 export function normalizeMapSize(n: number): number {
   if (!Number.isFinite(n)) return MIN_MAP_SIZE;
   const i = Math.floor(n);
-  const odd = i % 2 === 0 ? i + 1 : i;
-  return Math.min(MAX_MAP_SIZE, Math.max(MIN_MAP_SIZE, odd));
+  const remainder = (((i - 3) % 4) + 4) % 4;
+  const snapped = remainder === 0 ? i : i + (4 - remainder);
+  // 경계값 자체가 4n+3이므로 잘라내도 규칙이 깨지지 않는다.
+  return Math.min(MAX_MAP_SIZE, Math.max(MIN_MAP_SIZE, snapped));
 }
 
 export function isValidMapSize(n: number): boolean {
-  return Number.isInteger(n) && n % 2 === 1 && n >= MIN_MAP_SIZE && n <= MAX_MAP_SIZE;
+  return Number.isInteger(n) && n % 4 === 3 && n >= MIN_MAP_SIZE && n <= MAX_MAP_SIZE;
 }
 
 export function cellIndex(x: number, y: number, width: number): number {
@@ -125,7 +129,8 @@ export const DEFAULT_ANCHOR: Anchor = { x: 'center', y: 'middle' };
 function axisOffset(mode: 'start' | 'center' | 'end', oldSize: number, newSize: number): number {
   if (mode === 'start') return 0;
   if (mode === 'end') return newSize - oldSize;
-  // 양쪽 모두 홀수이므로 차이는 항상 짝수다. 정확히 가운데로 떨어진다.
+  // 양쪽 모두 4n+3이라 차이는 4의 배수다. 정확히 가운데로 떨어지고, 옮겨진 뒤에도
+  // 내용과 보호 격자의 정렬(2칸 간격)이 그대로 유지된다.
   return Math.floor((newSize - oldSize) / 2);
 }
 

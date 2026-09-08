@@ -1,7 +1,17 @@
 import { create } from 'zustand';
 import type { CellPos, LayerKey, MapDoc, TileDef, TileId, ToolId } from '@/core/types';
 import type { Anchor } from '@/core/tilemap';
-import { cellIndex, createDoc, getLayer, inBounds, normalizeMapSize, resizeDoc, sameGrid } from '@/core/tilemap';
+import {
+  cellIndex,
+  createDoc,
+  getLayer,
+  inBounds,
+  isValidMapSize,
+  normalizeMapSize,
+  resizeDoc,
+  sameGrid,
+} from '@/core/tilemap';
+import { isProtectedCell } from '@/core/lattice';
 import { History, type Stroke } from '@/core/history';
 import { tilesetIndex, TILE_WALL } from '@/core/tileset';
 import { forEachBrushCell, forEachLineCell } from '@/core/tools/brush';
@@ -11,8 +21,9 @@ import { fitToView, pan as panCamera, zoomAt } from '@/render/camera';
 import { loadAutosave, scheduleAutosave } from '@/io/autosave';
 import { openTextFile, saveTextAs, writeHandle, type FileHandleLike } from '@/io/fileDialog';
 
-export const DEFAULT_MAP_WIDTH = 33;
-export const DEFAULT_MAP_HEIGHT = 25;
+// 4n+3 규칙을 만족하는 값이어야 한다.
+export const DEFAULT_MAP_WIDTH = 35;
+export const DEFAULT_MAP_HEIGHT = 27;
 export const BRUSH_SIZES = [1, 3, 5, 7] as const;
 
 /**
@@ -27,6 +38,8 @@ let activeStroke: Stroke | null = null;
  * 전역 tool 상태를 건드리지 않고(툴바가 깜빡이지 않도록) 스트로크 단위로만 덮어쓴다.
  */
 let strokeTool: ToolId | null = null;
+/** 이번 스트로크에서 보호 격자 때문에 건너뛴 칸 수. 아무것도 안 그려졌을 때 이유를 알리는 데 쓴다. */
+let strokeBlocked = 0;
 
 interface EditorState {
   doc: MapDoc;
@@ -76,10 +89,16 @@ interface EditorState {
   redo: () => void;
 
   newDoc: (width: number, height: number, name: string) => void;
-  /** 내용을 유지한 채 맵 크기를 바꾼다. 크기는 홀수로 보정된다. */
+  /** 내용을 유지한 채 맵 크기를 바꾼다. 크기는 4n+3으로 보정된다. */
   resize: (width: number, height: number, anchor: Anchor, borderWalls: boolean) => void;
   save: (forcePicker?: boolean) => Promise<void>;
   open: () => Promise<void>;
+}
+
+/** 바깥에서 들어온 문서가 현재 크기 규칙에 맞는지 확인하고, 어긋나면 알릴 문구를 돌려준다. */
+function sizeWarning(doc: MapDoc): string | null {
+  if (isValidMapSize(doc.width) && isValidMapSize(doc.height)) return null;
+  return `크기 ${doc.width}×${doc.height}가 규칙(4n+3)과 다릅니다. [크기]에서 맞추길 권합니다.`;
 }
 
 function initialDoc(): { doc: MapDoc; restored: boolean } {
@@ -92,6 +111,11 @@ function initialDoc(): { doc: MapDoc; restored: boolean } {
 let fileHandle: FileHandleLike | null = null;
 
 const boot = initialDoc();
+
+function bootNotice(doc: MapDoc): string {
+  const warn = sizeWarning(doc);
+  return warn ? `이전 작업을 복구했습니다 · ${warn}` : '이전 작업을 자동 저장에서 복구했습니다.';
+}
 
 export const useEditorStore = create<EditorState>()((set, get) => {
   /** 진행 중인 스트로크에 변경을 기록하며 셀에 값을 쓴다. 값이 같으면 아무것도 하지 않는다. */
@@ -188,7 +212,7 @@ export const useEditorStore = create<EditorState>()((set, get) => {
 
     dirty: false,
     fileName: null,
-    notice: boot.restored ? '이전 작업을 자동 저장에서 복구했습니다.' : null,
+    notice: boot.restored ? bootNotice(boot.doc) : null,
 
     setTool: (tool) => set({ tool }),
     setActiveTile: (activeTileId) => set({ activeTileId, tool: 'brush' }),
@@ -214,6 +238,7 @@ export const useEditorStore = create<EditorState>()((set, get) => {
 
     beginStroke: (tool) => {
       strokeTool = tool ?? null;
+      strokeBlocked = 0;
       activeStroke = { label: tool ?? get().tool, changes: [] };
     },
 
@@ -231,7 +256,14 @@ export const useEditorStore = create<EditorState>()((set, get) => {
         placeUnique(doc, def, x, y);
         return;
       }
-      forEachBrushCell(x, y, brushSize, (cx, cy) => writeCell(doc, def.layer, cx, cy, def.id));
+      forEachBrushCell(x, y, brushSize, (cx, cy) => {
+        // 보호 격자 위에는 통행 불가 타일을 놓을 수 없다. 브러쉬의 나머지 칸은 정상적으로 칠한다.
+        if (def.solid && inBounds(doc, cx, cy) && isProtectedCell(doc, cx, cy)) {
+          strokeBlocked++;
+          return;
+        }
+        writeCell(doc, def.layer, cx, cy, def.id);
+      });
     },
 
     paintLine: (from, to) => {
@@ -241,12 +273,21 @@ export const useEditorStore = create<EditorState>()((set, get) => {
 
     endStroke: () => {
       const stroke = activeStroke;
+      const blocked = strokeBlocked;
       activeStroke = null;
       strokeTool = null;
+      strokeBlocked = 0;
       if (!stroke) return;
       if (!history.commit(stroke)) {
         // 실제로 바뀐 셀이 없으면 히스토리를 더럽히지 않는다.
-        set({ canUndo: history.canUndo, canRedo: history.canRedo });
+        // 다만 보호 격자에 전부 막혀서 그런 것이라면 이유를 알려 준다.
+        set({
+          canUndo: history.canUndo,
+          canRedo: history.canRedo,
+          ...(blocked > 0
+            ? { notice: '중앙 기준 2칸 간격 칸에는 통행 불가 타일을 놓을 수 없습니다.' }
+            : {}),
+        });
         return;
       }
       afterMutation();
@@ -311,14 +352,12 @@ export const useEditorStore = create<EditorState>()((set, get) => {
       try {
         const doc = parseJson(result.text);
         fileHandle = result.handle;
-        // 바깥에서 만들어진 파일은 짝수 크기일 수 있다. 멋대로 고치지 않고 알리기만 한다.
-        const evenSize = doc.width % 2 === 0 || doc.height % 2 === 0;
+        // 바깥에서 만들어진 파일은 크기 규칙에 안 맞을 수 있다. 멋대로 고치지 않고 알리기만 한다.
+        const warn = sizeWarning(doc);
         replaceDoc(doc, {
           dirty: false,
           fileName: result.fileName,
-          notice: evenSize
-            ? `열림 · ${result.fileName} · 크기가 짝수입니다. [크기]에서 홀수로 맞추길 권합니다.`
-            : `열림 · ${result.fileName}`,
+          notice: warn ? `열림 · ${result.fileName} · ${warn}` : `열림 · ${result.fileName}`,
         });
         scheduleAutosave(doc);
       } catch (err) {

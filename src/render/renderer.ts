@@ -1,6 +1,7 @@
 import type { CellPos, MapDoc, TileDef, TileId, ToolId } from '@/core/types';
 import { tilesetIndex } from '@/core/tileset';
 import { forEachBrushCell } from '@/core/tools/brush';
+import { centerCell, isProtectedCell } from '@/core/lattice';
 import type { Camera } from './camera';
 
 const BG = '#12151c';
@@ -9,10 +10,15 @@ const GRID_MINOR = 'rgba(255,255,255,0.055)';
 const GRID_MAJOR = 'rgba(255,255,255,0.13)';
 const HOVER_STROKE = 'rgba(255,255,255,0.85)';
 const ERASER_STROKE = 'rgba(248,113,113,0.9)';
+const BLOCKED_STROKE = 'rgba(248,113,113,0.95)';
+const LATTICE = 'rgba(110,168,254,0.42)';
 
 /** 이 크기보다 셀이 작아지면 격자선이 셀을 덮어버리므로 그리지 않는다. */
 const GRID_MIN_SCALE = 9;
 const MAJOR_EVERY = 5;
+
+/** 보호 격자 점은 이보다 작아지면 알아보기 어려워 그리지 않는다. */
+const LATTICE_MIN_SCALE = 7;
 
 export interface RenderState {
   doc: MapDoc;
@@ -21,6 +27,8 @@ export interface RenderState {
   hover: CellPos | null;
   brushSize: number;
   tool: ToolId;
+  /** 지금 선택된 타일이 통행 불가라서 보호 격자에 놓을 수 없는 상태인지 */
+  blockSolid: boolean;
 }
 
 /** 셀 경계를 정수 픽셀에 맞춰 인접 셀 사이에 실틈이 보이지 않게 한다. */
@@ -34,7 +42,7 @@ export function renderMap(
   viewH: number,
   state: RenderState,
 ): void {
-  const { doc, camera, showGrid, hover, brushSize, tool } = state;
+  const { doc, camera, showGrid, hover, brushSize, tool, blockSolid } = state;
   const tiles = tilesetIndex(doc.tileset);
 
   ctx.fillStyle = BG;
@@ -87,10 +95,14 @@ export function renderMap(
     drawGrid(ctx, camera, x0, y0, x1, y1);
   }
 
+  if (showGrid && camera.scale >= LATTICE_MIN_SCALE) {
+    drawLattice(ctx, doc, camera, x0, y0, x1, y1);
+  }
+
   drawMapBorder(ctx, doc, camera);
 
   if (hover) {
-    drawBrushCursor(ctx, doc, camera, hover, brushSize, tool);
+    drawBrushCursor(ctx, doc, camera, hover, brushSize, tool, blockSolid);
   }
 }
 
@@ -136,6 +148,38 @@ function drawGrid(
   }
 }
 
+/**
+ * 보호 격자 표시.
+ * 이 점이 찍힌 칸은 항상 지나갈 수 있어야 하므로 통행 불가 타일을 놓을 수 없다.
+ * 브러쉬가 왜 칠해지지 않는지 알 수 있도록 눈에 보이게 그린다.
+ */
+function drawLattice(
+  ctx: CanvasRenderingContext2D,
+  doc: MapDoc,
+  cam: Camera,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+): void {
+  const center = centerCell(doc);
+  const r = Math.max(1, Math.min(2.5, cam.scale * 0.085));
+
+  ctx.fillStyle = LATTICE;
+  ctx.beginPath();
+  for (let y = y0; y <= y1; y++) {
+    if ((y - center.y) % 2 !== 0) continue;
+    const py = cam.oy + (y + 0.5) * cam.scale;
+    for (let x = x0; x <= x1; x++) {
+      if ((x - center.x) % 2 !== 0) continue;
+      const px = cam.ox + (x + 0.5) * cam.scale;
+      ctx.moveTo(px + r, py);
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+    }
+  }
+  ctx.fill();
+}
+
 function drawMapBorder(ctx: CanvasRenderingContext2D, doc: MapDoc, cam: Camera): void {
   const x = edge(cam.ox, 0, cam.scale) + 0.5;
   const y = edge(cam.oy, 0, cam.scale) + 0.5;
@@ -151,15 +195,29 @@ function drawBrushCursor(
   hover: CellPos,
   brushSize: number,
   tool: ToolId,
+  blockSolid: boolean,
 ): void {
-  ctx.strokeStyle = tool === 'eraser' ? ERASER_STROKE : HOVER_STROKE;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
+  const free: CellPos[] = [];
+  const blocked: CellPos[] = [];
+
   forEachBrushCell(hover.x, hover.y, brushSize, (x, y) => {
     if (x < 0 || y < 0 || x >= doc.width || y >= doc.height) return;
-    const sx = edge(cam.ox, x, cam.scale) + 0.5;
-    const sy = edge(cam.oy, y, cam.scale) + 0.5;
-    ctx.rect(sx, sy, edge(cam.ox, x + 1, cam.scale) - sx, edge(cam.oy, y + 1, cam.scale) - sy);
+    (blockSolid && isProtectedCell(doc, x, y) ? blocked : free).push({ x, y });
   });
-  ctx.stroke();
+
+  const outline = (cells: CellPos[], color: string) => {
+    if (cells.length === 0) return;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (const cell of cells) {
+      const sx = edge(cam.ox, cell.x, cam.scale) + 0.5;
+      const sy = edge(cam.oy, cell.y, cam.scale) + 0.5;
+      ctx.rect(sx, sy, edge(cam.ox, cell.x + 1, cam.scale) - sx, edge(cam.oy, cell.y + 1, cam.scale) - sy);
+    }
+    ctx.stroke();
+  };
+
+  outline(free, tool === 'eraser' ? ERASER_STROKE : HOVER_STROKE);
+  outline(blocked, BLOCKED_STROKE);
 }

@@ -79,8 +79,8 @@ export function ResizeDialog({ open, onClose }: ResizeDialogProps) {
               )}
             </div>
             <p className="flex-1 text-[11px] leading-relaxed text-ink-dim/80">
-              기존 내용을 새 맵의 어디에 붙일지 고릅니다. 가운데를 고르면 가로·세로가
-              모두 홀수라 정확히 중앙에 놓입니다.
+              기존 내용을 새 맵의 어디에 붙일지 고릅니다. 가로·세로가 모두 홀수라
+              가운데를 고르면 정확히 중앙에 놓입니다.
             </p>
           </div>
         </div>

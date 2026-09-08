@@ -4,9 +4,9 @@ import { DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH, useEditorStore } from '@/store/e
 import { Modal } from './Modal';
 import { SizeField } from './SizeField';
 
-// 미로 크기는 홀수여야 하므로 프리셋도 모두 홀수로 둔다.
+// 프리셋도 4n+3 규칙을 지켜야 한다.
 const PRESETS: Array<{ label: string; w: number; h: number }> = [
-  { label: '작게', w: 21, h: 15 },
+  { label: '작게', w: 15, h: 11 },
   { label: '기본', w: DEFAULT_MAP_WIDTH, h: DEFAULT_MAP_HEIGHT },
   { label: '크게', w: 51, h: 39 },
 ];
@@ -74,8 +74,9 @@ export function NewMapDialog({ open, onClose }: NewMapDialogProps) {
         </div>
 
         <p className="mb-3 text-[11px] leading-relaxed text-ink-dim/80">
-          바깥 테두리는 벽으로 채워집니다. 가로·세로는 홀수만 쓸 수 있습니다 &mdash; 셀 기반
-          미로에서는 벽도 한 칸을 차지해서 2n+1 이라야 통로와 벽이 딱 떨어집니다.
+          바깥 테두리는 벽으로 채워집니다. 가로·세로는 4n+3 (3, 7, 11, 15, …) 만 쓸 수
+          있습니다 &mdash; 벽도 한 칸을 차지하므로 홀수라야 통로와 벽이 딱 떨어지고, 그중에서도
+          4n+3 일 때만 중앙 기준 보호 격자가 바깥 테두리와 겹치지 않습니다.
         </p>
 
         {dirty && (

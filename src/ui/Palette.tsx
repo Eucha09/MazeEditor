@@ -96,6 +96,10 @@ export function Palette() {
           <Row k="Space + 드래그" v="화면 이동" />
           <Row k="휠" v="확대 / 축소" />
         </dl>
+        <p className="mt-2 text-[11px] leading-relaxed text-ink-dim/70">
+          <span className="text-accent">·</span> 점이 찍힌 칸은 중앙 기준 2칸 간격의 보호 격자입니다.
+          항상 지나갈 수 있어야 하므로 벽 같은 통행 불가 타일을 놓을 수 없습니다.
+        </p>
       </section>
     </aside>
   );

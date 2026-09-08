@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { CellPos } from '@/core/types';
+import { tilesetIndex } from '@/core/tileset';
 import { computeFit, useEditorStore } from '@/store/editorStore';
 import { screenToCell } from './camera';
 import { renderMap } from './renderer';
@@ -38,6 +39,7 @@ export function CanvasView() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     const s = useEditorStore.getState();
+    const activeTile = tilesetIndex(s.doc.tileset).get(s.activeTileId);
     renderMap(ctx, w, h, {
       doc: s.doc,
       camera: s.camera,
@@ -45,6 +47,7 @@ export function CanvasView() {
       hover: s.hover,
       brushSize: s.brushSize,
       tool: s.tool,
+      blockSolid: s.tool === 'brush' && activeTile?.solid === true,
     });
   }, []);
 
