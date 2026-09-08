@@ -1,11 +1,12 @@
-import { FilePlus, FolderOpen, Save } from 'lucide-react';
+import { FilePlus, FolderOpen, Save, Scaling } from 'lucide-react';
 import { useEditorStore } from '@/store/editorStore';
 
 interface TopBarProps {
   onNewMap: () => void;
+  onResize: () => void;
 }
 
-export function TopBar({ onNewMap }: TopBarProps) {
+export function TopBar({ onNewMap, onResize }: TopBarProps) {
   const name = useEditorStore((s) => s.doc.name);
   const dirty = useEditorStore((s) => s.dirty);
   const setDocName = useEditorStore((s) => s.setDocName);
@@ -32,6 +33,7 @@ export function TopBar({ onNewMap }: TopBarProps) {
 
       <div className="ml-auto flex items-center gap-1">
         <TextButton icon={FilePlus} label="새 맵" onClick={onNewMap} />
+        <TextButton icon={Scaling} label="크기" onClick={onResize} />
         <TextButton icon={FolderOpen} label="열기" hotkey="Ctrl+O" onClick={() => void open()} />
         <TextButton icon={Save} label="저장" hotkey="Ctrl+S" onClick={() => void save()} />
       </div>

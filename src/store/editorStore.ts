@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { CellPos, LayerKey, MapDoc, TileDef, TileId, ToolId } from '@/core/types';
-import { cellIndex, clampMapSize, createDoc, getLayer, inBounds } from '@/core/tilemap';
+import type { Anchor } from '@/core/tilemap';
+import { cellIndex, createDoc, getLayer, inBounds, normalizeMapSize, resizeDoc, sameGrid } from '@/core/tilemap';
 import { History, type Stroke } from '@/core/history';
 import { tilesetIndex, TILE_WALL } from '@/core/tileset';
 import { forEachBrushCell, forEachLineCell } from '@/core/tools/brush';
@@ -75,6 +76,8 @@ interface EditorState {
   redo: () => void;
 
   newDoc: (width: number, height: number, name: string) => void;
+  /** 내용을 유지한 채 맵 크기를 바꾼다. 크기는 홀수로 보정된다. */
+  resize: (width: number, height: number, anchor: Anchor, borderWalls: boolean) => void;
   save: (forcePicker?: boolean) => Promise<void>;
   open: () => Promise<void>;
 }
@@ -132,9 +135,24 @@ export const useEditorStore = create<EditorState>()((set, get) => {
     writeCell(doc, def.layer, x, y, def.id);
   }
 
-  function afterMutation(): void {
-    const { doc } = get();
-    set({ rev: get().rev + 1, dirty: true, canUndo: history.canUndo, canRedo: history.canRedo });
+  /**
+   * 편집 직후의 뒷정리.
+   * nextDoc이 현재 문서와 다른 객체이면(크기 조정 등) 문서를 교체하고 화면도 다시 맞춘다.
+   */
+  function afterMutation(nextDoc?: MapDoc): void {
+    const doc = nextDoc ?? get().doc;
+    const patch: Partial<EditorState> = {
+      rev: get().rev + 1,
+      dirty: true,
+      canUndo: history.canUndo,
+      canRedo: history.canRedo,
+    };
+    if (doc !== get().doc) {
+      patch.doc = doc;
+      patch.hover = null;
+      patch.fitRequest = get().fitRequest + 1;
+    }
+    set(patch);
     scheduleAutosave(doc);
   }
 
@@ -235,22 +253,38 @@ export const useEditorStore = create<EditorState>()((set, get) => {
     },
 
     undo: () => {
-      const { doc } = get();
-      if (!history.undo(doc)) return;
-      afterMutation();
+      const next = history.undo(get().doc);
+      if (!next) return;
+      afterMutation(next);
     },
 
     redo: () => {
-      const { doc } = get();
-      if (!history.redo(doc)) return;
-      afterMutation();
+      const next = history.redo(get().doc);
+      if (!next) return;
+      afterMutation(next);
     },
 
     newDoc: (width, height, name) => {
-      const doc = createDoc(clampMapSize(width), clampMapSize(height), { name: name || '새 맵' });
+      const doc = createDoc(width, height, { name: name || '새 맵' });
       fileHandle = null;
       replaceDoc(doc, { dirty: false, fileName: null, notice: `새 맵 ${doc.width}×${doc.height}` });
       scheduleAutosave(doc);
+    },
+
+    resize: (width, height, anchor, borderWalls) => {
+      const prev = get().doc;
+      const w = normalizeMapSize(width);
+      const h = normalizeMapSize(height);
+      const next = resizeDoc(prev, w, h, { anchor, borderWalls });
+
+      // 결과가 이전과 완전히 같으면 되돌릴 것 없는 히스토리 항목을 남기지 않는다.
+      if (sameGrid(prev, next)) {
+        set({ notice: `크기 변화 없음 · ${w}×${h}` });
+        return;
+      }
+      history.commitDoc('resize', prev, next);
+      set({ notice: `크기 조정 · ${prev.width}×${prev.height} → ${w}×${h}` });
+      afterMutation(next);
     },
 
     save: async (forcePicker = false) => {
@@ -277,10 +311,14 @@ export const useEditorStore = create<EditorState>()((set, get) => {
       try {
         const doc = parseJson(result.text);
         fileHandle = result.handle;
+        // 바깥에서 만들어진 파일은 짝수 크기일 수 있다. 멋대로 고치지 않고 알리기만 한다.
+        const evenSize = doc.width % 2 === 0 || doc.height % 2 === 0;
         replaceDoc(doc, {
           dirty: false,
           fileName: result.fileName,
-          notice: `열림 · ${result.fileName}`,
+          notice: evenSize
+            ? `열림 · ${result.fileName} · 크기가 짝수입니다. [크기]에서 홀수로 맞추길 권합니다.`
+            : `열림 · ${result.fileName}`,
         });
         scheduleAutosave(doc);
       } catch (err) {
