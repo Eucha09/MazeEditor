@@ -1,35 +1,42 @@
-/**
- * 에디터 셸 레이아웃.
- * 0단계에서는 골격만 세운다. 각 영역은 이후 단계에서 실제 컴포넌트로 교체된다.
- *   - 좌측 세로바  : Toolbar   (2단계)
- *   - 우측 패널    : Palette   (2단계)
- *   - 중앙        : CanvasView (1단계)
- *   - 하단        : StatusBar  (1단계)
- */
+import { useEffect, useState } from 'react';
+import { CanvasView } from '@/render/CanvasView';
+import { useEditorStore } from '@/store/editorStore';
+import { useHotkeys } from '@/hooks/useHotkeys';
+import { NewMapDialog } from '@/ui/NewMapDialog';
+import { Palette } from '@/ui/Palette';
+import { StatusBar } from '@/ui/StatusBar';
+import { Toolbar } from '@/ui/Toolbar';
+import { TopBar } from '@/ui/TopBar';
+
 export default function App() {
+  const [newMapOpen, setNewMapOpen] = useState(false);
+  const dirty = useEditorStore((s) => s.dirty);
+
+  useHotkeys(!newMapOpen);
+
+  // 저장하지 않은 편집이 있으면 탭을 닫기 전에 확인한다.
+  // (자동 저장이 있긴 하지만 브라우저를 바꾸면 복구되지 않는다)
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [dirty]);
+
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-10 shrink-0 items-center gap-3 border-b border-edge bg-panel-2 px-3">
-        <span className="text-sm font-semibold tracking-tight">Maze Editor</span>
-        <span className="text-xs text-ink-dim">v0.1.0 · 스캐폴딩</span>
-      </header>
+      <TopBar onNewMap={() => setNewMapOpen(true)} />
 
       <div className="flex min-h-0 flex-1">
-        <nav className="w-12 shrink-0 border-r border-edge bg-panel-2" aria-label="도구" />
-
-        <main className="grid min-w-0 flex-1 place-items-center">
-          <div className="text-center">
-            <p className="text-sm text-ink-dim">캔버스 영역</p>
-            <p className="mt-1 text-xs text-ink-dim">1단계에서 격자 렌더링이 들어갑니다.</p>
-          </div>
+        <Toolbar />
+        <main className="min-w-0 flex-1">
+          <CanvasView />
         </main>
-
-        <aside className="w-56 shrink-0 border-l border-edge bg-panel-2" aria-label="타일 팔레트" />
+        <Palette />
       </div>
 
-      <footer className="flex h-6 shrink-0 items-center border-t border-edge bg-panel-2 px-3 text-xs text-ink-dim">
-        준비됨
-      </footer>
+      <StatusBar />
+      <NewMapDialog open={newMapOpen} onClose={() => setNewMapOpen(false)} />
     </div>
   );
 }
