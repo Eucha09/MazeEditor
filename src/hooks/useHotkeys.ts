@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { BRUSH_SIZES, useEditorStore } from '@/store/editorStore';
+import { useEditorStore } from '@/store/editorStore';
+import { useBrushStore } from '@/store/brushStore';
 
 function isTypingTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
@@ -56,25 +57,32 @@ export function useHotkeys(enabled: boolean): void {
         case 'E':
           s.setTool('eraser');
           return;
+        case 'g':
+        case 'G':
+          s.setTool('fill');
+          return;
         case '#':
           s.toggleGrid();
           return;
-        case '[':
-        case ']': {
-          const i = BRUSH_SIZES.indexOf(s.brushSize as (typeof BRUSH_SIZES)[number]);
-          const next = e.key === '[' ? i - 1 : i + 1;
-          const size = BRUSH_SIZES[Math.min(BRUSH_SIZES.length - 1, Math.max(0, next))];
-          s.setBrushSize(size);
+        case 'm':
+        case 'M':
+          s.generateMaze();
           return;
-        }
+        case 'Escape':
+          if (s.mazePreview) s.exitMazePreview();
+          return;
         default:
           break;
       }
 
-      // 숫자 키는 팔레트에 보이는 순서대로 타일을 고른다.
+      // 숫자 키는 팔레트에 보이는 순서대로 브러쉬를 고른다.
       if (e.key >= '1' && e.key <= '9') {
-        const tile = s.doc.tileset[Number(e.key) - 1];
-        if (tile) s.setActiveTile(tile.id);
+        const brushStore = useBrushStore.getState();
+        const brush = brushStore.brushes[Number(e.key) - 1];
+        if (brush) {
+          brushStore.setActiveBrush(brush.id);
+          s.setTool('brush');
+        }
       }
     };
 

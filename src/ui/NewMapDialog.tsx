@@ -74,9 +74,9 @@ export function NewMapDialog({ open, onClose }: NewMapDialogProps) {
         </div>
 
         <p className="mb-3 text-[11px] leading-relaxed text-ink-dim/80">
-          바깥 테두리는 벽으로 채워집니다. 가로·세로는 4n+3 (3, 7, 11, 15, …) 만 쓸 수
+          모든 칸은 None(미정)으로 시작합니다. 가로·세로는 4n+3 (3, 7, 11, 15, …) 만 쓸 수
           있습니다 &mdash; 벽도 한 칸을 차지하므로 홀수라야 통로와 벽이 딱 떨어지고, 그중에서도
-          4n+3 일 때만 중앙 기준 보호 격자가 바깥 테두리와 겹치지 않습니다.
+          4n+3 일 때만 중앙 기준 floor 칸이 바깥 테두리와 겹치지 않습니다.
         </p>
 
         {dirty && (

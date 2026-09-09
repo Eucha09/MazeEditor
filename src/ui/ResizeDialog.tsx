@@ -23,7 +23,6 @@ export function ResizeDialog({ open, onClose }: ResizeDialogProps) {
   const [width, setWidth] = useState(String(doc.width));
   const [height, setHeight] = useState(String(doc.height));
   const [anchor, setAnchor] = useState<Anchor>(DEFAULT_ANCHOR);
-  const [borderWalls, setBorderWalls] = useState(true);
 
   // 열 때마다 현재 맵 크기에서 시작한다.
   useEffect(() => {
@@ -39,7 +38,7 @@ export function ResizeDialog({ open, onClose }: ResizeDialogProps) {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    resize(w, h, anchor, borderWalls);
+    resize(w, h, anchor);
     onClose();
   };
 
@@ -85,16 +84,6 @@ export function ResizeDialog({ open, onClose }: ResizeDialogProps) {
           </div>
         </div>
 
-        <label className="mb-3 flex items-center gap-2 text-xs text-ink-dim">
-          <input
-            type="checkbox"
-            checked={borderWalls}
-            onChange={(e) => setBorderWalls(e.target.checked)}
-            className="accent-accent"
-          />
-          바깥 테두리를 벽으로 다시 채우기
-        </label>
-
         {shrinks && (
           <p className="mb-3 rounded-md bg-amber-400/10 px-2 py-1.5 text-[11px] leading-relaxed text-amber-300/90">
             맵이 줄어들어 바깥쪽 내용이 잘립니다. <kbd className="font-mono">Ctrl+Z</kbd> 로 되돌릴 수 있습니다.
@@ -111,7 +100,7 @@ export function ResizeDialog({ open, onClose }: ResizeDialogProps) {
           </button>
           <button
             type="submit"
-            disabled={unchanged && !borderWalls}
+            disabled={unchanged}
             className="rounded-md bg-accent/20 px-3 py-1.5 text-sm text-accent transition-colors hover:bg-accent/30 disabled:opacity-40 disabled:hover:bg-accent/20"
           >
             적용 ({w}×{h})

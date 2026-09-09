@@ -1,30 +1,38 @@
 import { create } from 'zustand';
-import type { CellPos, LayerKey, MapDoc, TileDef, TileId, ToolId } from '@/core/types';
+import type { CellPos, GridId, MapDoc, ToolId } from '@/core/types';
+import { TERRAIN_NONE } from '@/core/types';
 import type { Anchor } from '@/core/tilemap';
 import {
+  brushGridOf,
   cellIndex,
   createDoc,
+  getGrid,
   getLayer,
   inBounds,
   isValidMapSize,
   normalizeMapSize,
+  objectGridOf,
   resizeDoc,
   sameGrid,
 } from '@/core/tilemap';
-import { isProtectedCell } from '@/core/lattice';
+import type { Brush } from '@/core/brush';
+import { objectIdFor } from '@/core/brush';
+import { cellKind } from '@/core/lattice';
 import { History, type Stroke } from '@/core/history';
-import { tilesetIndex, TILE_WALL } from '@/core/tileset';
 import { forEachBrushCell, forEachLineCell } from '@/core/tools/brush';
+import { checkBlobPlacement, isCellAllowed, REJECTION_MESSAGE } from '@/core/tools/place';
+import { floodFillRegion } from '@/core/tools/fill';
+import { generateMazePreview } from '@/core/tools/generateMaze';
 import { parseJson, toJson } from '@/core/io/serialize';
 import type { Camera } from '@/render/camera';
 import { fitToView, pan as panCamera, zoomAt } from '@/render/camera';
 import { loadAutosave, scheduleAutosave } from '@/io/autosave';
 import { openTextFile, saveTextAs, writeHandle, type FileHandleLike } from '@/io/fileDialog';
+import { useBrushStore } from './brushStore';
 
 // 4n+3 규칙을 만족하는 값이어야 한다.
 export const DEFAULT_MAP_WIDTH = 35;
 export const DEFAULT_MAP_HEIGHT = 27;
-export const BRUSH_SIZES = [1, 3, 5, 7] as const;
 
 /**
  * 히스토리와 진행 중인 스트로크는 React 상태 밖에 둔다.
@@ -38,13 +46,13 @@ let activeStroke: Stroke | null = null;
  * 전역 tool 상태를 건드리지 않고(툴바가 깜빡이지 않도록) 스트로크 단위로만 덮어쓴다.
  */
 let strokeTool: ToolId | null = null;
-/** 이번 스트로크에서 보호 격자 때문에 건너뛴 칸 수. 아무것도 안 그려졌을 때 이유를 알리는 데 쓴다. */
-let strokeBlocked = 0;
+/** 이번 스트로크에서 규칙 때문에 건너뛴 이유. 아무것도 안 그려졌을 때 알리는 데 쓴다. */
+let strokeBlockReason: string | null = null;
 
 interface EditorState {
   doc: MapDoc;
   /**
-   * doc의 타일 배열은 제자리에서 변경된다(참조가 바뀌지 않는다).
+   * doc의 격자는 제자리에서 변경된다(참조가 바뀌지 않는다).
    * 렌더러는 이 카운터로 다시 그릴 시점을 판단한다.
    */
   rev: number;
@@ -54,10 +62,15 @@ interface EditorState {
   fitRequest: number;
 
   tool: ToolId;
-  activeTileId: TileId;
-  brushSize: number;
   showGrid: boolean;
   hover: CellPos | null;
+
+  /**
+   * 미로 생성 미리보기 결과 (지형 타입 격자). null이면 미리보기가 꺼진 상태다.
+   * doc은 전혀 건드리지 않으므로 맵 파일에는 영향이 없다 — 렌더러가 doc.terrainType
+   * 대신 이 값을 잠깐 보여줄 뿐이다.
+   */
+  mazePreview: Uint8Array | null;
 
   canUndo: boolean;
   canRedo: boolean;
@@ -67,8 +80,6 @@ interface EditorState {
   notice: string | null;
 
   setTool: (tool: ToolId) => void;
-  setActiveTile: (id: TileId) => void;
-  setBrushSize: (size: number) => void;
   toggleGrid: () => void;
   setHover: (cell: CellPos | null) => void;
   setNotice: (text: string | null) => void;
@@ -88,9 +99,13 @@ interface EditorState {
   undo: () => void;
   redo: () => void;
 
+  /** 현재 맵의 Seed 엔티티들로 미로를 생성해 미리보기를 켠다. 문서는 바뀌지 않는다. */
+  generateMaze: () => void;
+  exitMazePreview: () => void;
+
   newDoc: (width: number, height: number, name: string) => void;
   /** 내용을 유지한 채 맵 크기를 바꾼다. 크기는 4n+3으로 보정된다. */
-  resize: (width: number, height: number, anchor: Anchor, borderWalls: boolean) => void;
+  resize: (width: number, height: number, anchor: Anchor) => void;
   save: (forcePicker?: boolean) => Promise<void>;
   open: () => Promise<void>;
 }
@@ -117,46 +132,115 @@ function bootNotice(doc: MapDoc): string {
   return warn ? `이전 작업을 복구했습니다 · ${warn}` : '이전 작업을 자동 저장에서 복구했습니다.';
 }
 
+function currentBrush(): Brush | null {
+  const { brushes, activeBrushId } = useBrushStore.getState();
+  return brushes.find((b) => b.id === activeBrushId) ?? null;
+}
+
 export const useEditorStore = create<EditorState>()((set, get) => {
-  /** 진행 중인 스트로크에 변경을 기록하며 셀에 값을 쓴다. 값이 같으면 아무것도 하지 않는다. */
-  function writeCell(doc: MapDoc, layerKey: LayerKey, x: number, y: number, tile: TileId): void {
-    if (!inBounds(doc, x, y)) return;
-    const layer = getLayer(doc, layerKey);
-    const index = cellIndex(x, y, doc.width);
-    const before = layer.data[index];
-    if (before === tile) return;
-    layer.data[index] = tile;
-    activeStroke?.changes.push({ layer: layerKey, index, before, after: tile });
+  /** 진행 중인 스트로크에 변경을 기록하며 격자 한 칸에 값을 쓴다. 값이 같으면 아무것도 하지 않는다. */
+  function writeGridAt(doc: MapDoc, grid: GridId, index: number, value: number): void {
+    const data = getGrid(doc, grid);
+    const before = data[index];
+    if (before === value) return;
+    data[index] = value;
+    activeStroke?.changes.push({ grid, index, before, after: value });
   }
 
-  function writeCellAt(doc: MapDoc, layerKey: LayerKey, index: number, tile: TileId): void {
-    const layer = getLayer(doc, layerKey);
-    const before = layer.data[index];
-    if (before === tile) return;
-    layer.data[index] = tile;
-    activeStroke?.changes.push({ layer: layerKey, index, before, after: tile });
+  /**
+   * 브러쉬 한 칸을 찍는다. terrain 브러쉬는 지형 타입도 함께 기록하고, 어떤
+   * 브러쉬가 찍었는지도 함께 남긴다 (호버 정보, unique 브러쉬 재배치에 쓰인다).
+   */
+  function writeBrushCell(
+    doc: MapDoc,
+    brush: Brush,
+    x: number,
+    y: number,
+    objectId: number,
+    brushId: number,
+  ): void {
+    if (!inBounds(doc, x, y)) return;
+    const index = cellIndex(x, y, doc.width);
+    if (brush.layer === 'terrain') writeGridAt(doc, 'terrainType', index, brush.terrainType);
+    writeGridAt(doc, objectGridOf(brush.layer), index, objectId);
+    writeGridAt(doc, brushGridOf(brush.layer), index, brushId);
   }
 
   function eraseCell(doc: MapDoc, x: number, y: number): void {
     if (!inBounds(doc, x, y)) return;
-    // 위 레이어부터 지운다. 엔티티가 있으면 엔티티만, 없으면 지형을 기본값으로 되돌린다.
-    const entity = getLayer(doc, 'entity');
     const index = cellIndex(x, y, doc.width);
-    if (entity.data[index] !== entity.defaultTile) {
-      writeCellAt(doc, 'entity', index, entity.defaultTile);
+    // 위 레이어부터 지운다. 엔티티가 있으면 엔티티만, 없으면 지형을 None으로 되돌린다.
+    // 오브젝트 ID가 아니라 브러쉬 id로 "칠해져 있는지"를 판단한다 — 오브젝트 ID를
+    // 0으로 두는 브러쉬(장식용 등)도 정확히 감지해야 하기 때문이다.
+    if (getLayer(doc, 'entity').brush[index] !== 0) {
+      writeGridAt(doc, 'entityObject', index, 0);
+      writeGridAt(doc, 'entityBrush', index, 0);
       return;
     }
-    const terrain = getLayer(doc, 'terrain');
-    writeCellAt(doc, 'terrain', index, terrain.defaultTile);
+    writeGridAt(doc, 'terrainType', index, TERRAIN_NONE);
+    writeGridAt(doc, 'terrainObject', index, 0);
+    writeGridAt(doc, 'terrainBrush', index, 0);
   }
 
-  /** 맵에 하나만 존재해야 하는 타일. 기존 위치를 지우고 새 자리에 놓는다. */
-  function placeUnique(doc: MapDoc, def: TileDef, x: number, y: number): void {
-    if (!inBounds(doc, x, y)) return;
-    const layer = getLayer(doc, def.layer);
-    const prev = layer.data.indexOf(def.id);
-    if (prev >= 0) writeCellAt(doc, def.layer, prev, layer.defaultTile);
-    writeCell(doc, def.layer, x, y, def.id);
+  /**
+   * 맵에 하나만 존재해야 하는 브러쉬. 기존에 놓인 것을 지운다.
+   * 지형 타입은 무엇이었는지 알 수 없으므로 건드리지 않고 오브젝트와 브러쉬 id만
+   * 거둬들인다. 브러쉬 id로 정확히 찾으므로, 이 브러쉬의 오브젝트 ID를 나중에
+   * 바꿔도 예전에 놓인 칸을 놓치지 않는다.
+   */
+  function clearPreviousUnique(doc: MapDoc, brush: Brush): void {
+    const brushGrid = brushGridOf(brush.layer);
+    const brushIds = getGrid(doc, brushGrid);
+    const objectGrid = objectGridOf(brush.layer);
+    for (let i = 0; i < brushIds.length; i++) {
+      if (brushIds[i] !== brush.id) continue;
+      writeGridAt(doc, objectGrid, i, 0);
+      writeGridAt(doc, brushGrid, i, 0);
+    }
+  }
+
+  function placeBrush(doc: MapDoc, brush: Brush, cx: number, cy: number): void {
+    if (brush.blob) {
+      const rejection = checkBlobPlacement(doc, useBrushStore.getState().brushes, brush, cx, cy);
+      if (rejection) {
+        strokeBlockReason = REJECTION_MESSAGE[rejection];
+        return;
+      }
+      if (brush.unique) clearPreviousUnique(doc, brush);
+      // 덩어리는 가운데 한 칸에만 오브젝트 ID·브러쉬 id를 남기고 나머지는 0으로 둔다.
+      forEachBrushCell(cx, cy, brush.size, (x, y) => {
+        const isCenter = x === cx && y === cy;
+        const id = isCenter ? objectIdFor(brush, cellKind(doc, x, y)) : 0;
+        writeBrushCell(doc, brush, x, y, id, isCenter ? brush.id : 0);
+      });
+      return;
+    }
+
+    if (brush.unique) clearPreviousUnique(doc, brush);
+    forEachBrushCell(cx, cy, brush.size, (x, y) => {
+      if (!inBounds(doc, x, y)) return;
+      // 놓을 수 없는 칸 종류는 건너뛴다. 브러쉬의 나머지 칸은 정상적으로 칠한다.
+      if (!isCellAllowed(doc, brush, x, y)) {
+        strokeBlockReason = REJECTION_MESSAGE['cell-kind'];
+        return;
+      }
+      writeBrushCell(doc, brush, x, y, objectIdFor(brush, cellKind(doc, x, y)), brush.id);
+    });
+  }
+
+  /**
+   * 클릭한 칸과 (지형 타입, 오브젝트 ID)가 정확히 같은, 이어진 영역 전체를
+   * 이 브러쉬로 다시 칠한다. 영역이 이미 그 값과 같으면 자연히 아무것도 바뀌지 않는다.
+   */
+  function fillRegion(doc: MapDoc, brush: Brush, x: number, y: number): void {
+    if (!brush.fillable) {
+      strokeBlockReason = REJECTION_MESSAGE['not-fillable'];
+      return;
+    }
+    const cells = floodFillRegion(doc, brush.layer, x, y);
+    for (const cell of cells) {
+      writeBrushCell(doc, brush, cell.x, cell.y, objectIdFor(brush, cellKind(doc, cell.x, cell.y)), brush.id);
+    }
   }
 
   /**
@@ -170,6 +254,8 @@ export const useEditorStore = create<EditorState>()((set, get) => {
       dirty: true,
       canUndo: history.canUndo,
       canRedo: history.canRedo,
+      // 문서가 바뀌면 미리보기는 더 이상 지금 상태를 반영하지 않으므로 꺼 둔다.
+      mazePreview: null,
     };
     if (doc !== get().doc) {
       patch.doc = doc;
@@ -191,6 +277,7 @@ export const useEditorStore = create<EditorState>()((set, get) => {
       canRedo: false,
       hover: null,
       fitRequest: get().fitRequest + 1,
+      mazePreview: null,
       ...patch,
     });
   }
@@ -202,10 +289,9 @@ export const useEditorStore = create<EditorState>()((set, get) => {
     fitRequest: 1,
 
     tool: 'brush',
-    activeTileId: TILE_WALL,
-    brushSize: 1,
     showGrid: true,
     hover: null,
+    mazePreview: null,
 
     canUndo: false,
     canRedo: false,
@@ -215,8 +301,6 @@ export const useEditorStore = create<EditorState>()((set, get) => {
     notice: boot.restored ? bootNotice(boot.doc) : null,
 
     setTool: (tool) => set({ tool }),
-    setActiveTile: (activeTileId) => set({ activeTileId, tool: 'brush' }),
-    setBrushSize: (brushSize) => set({ brushSize }),
     toggleGrid: () => set({ showGrid: !get().showGrid }),
     setHover: (hover) => {
       const prev = get().hover;
@@ -237,56 +321,57 @@ export const useEditorStore = create<EditorState>()((set, get) => {
     requestFit: () => set({ fitRequest: get().fitRequest + 1 }),
 
     beginStroke: (tool) => {
+      // 미리보기 중에는 실제 문서를 편집할 수 없다 — 화면에 보이는 게 doc이 아니다.
+      if (get().mazePreview !== null) return;
       strokeTool = tool ?? null;
-      strokeBlocked = 0;
+      strokeBlockReason = null;
       activeStroke = { label: tool ?? get().tool, changes: [] };
     },
 
     paintAt: (x, y) => {
-      const { doc, activeTileId, brushSize } = get();
+      const { doc, mazePreview } = get();
+      // 미리보기 화면은 doc이 아니므로, beginStroke가 막힌 뒤에도 혹시 호출되면
+      // 여기서도 한 번 더 막는다 — 기록 없이 doc이 조용히 바뀌는 일을 막기 위해서다.
+      if (mazePreview !== null) return;
       const tool = strokeTool ?? get().tool;
+      const brush = currentBrush();
+
       if (tool === 'eraser') {
-        forEachBrushCell(x, y, brushSize, (cx, cy) => eraseCell(doc, cx, cy));
+        // 지우개도 선택된 브러쉬의 크기를 따른다. 칠한 만큼 지울 수 있어야 한다.
+        forEachBrushCell(x, y, brush?.size ?? 1, (cx, cy) => eraseCell(doc, cx, cy));
         return;
       }
-      const def = tilesetIndex(doc.tileset).get(activeTileId);
-      if (!def) return;
-      if (def.unique) {
-        // 시작/목표는 브러쉬 크기를 무시하고 한 칸만 놓는다.
-        placeUnique(doc, def, x, y);
+      if (!brush) return;
+      if (tool === 'fill') {
+        fillRegion(doc, brush, x, y);
         return;
       }
-      forEachBrushCell(x, y, brushSize, (cx, cy) => {
-        // 보호 격자 위에는 통행 불가 타일을 놓을 수 없다. 브러쉬의 나머지 칸은 정상적으로 칠한다.
-        if (def.solid && inBounds(doc, cx, cy) && isProtectedCell(doc, cx, cy)) {
-          strokeBlocked++;
-          return;
-        }
-        writeCell(doc, def.layer, cx, cy, def.id);
-      });
+      placeBrush(doc, brush, x, y);
     },
 
     paintLine: (from, to) => {
+      const tool = strokeTool ?? get().tool;
+      // 덩어리 브러쉬와 채우기는 한 번 누를 때 한 번만 적용한다. 드래그로 이어지지 않는다.
+      if (tool === 'brush' && currentBrush()?.blob) return;
+      if (tool === 'fill') return;
       const paint = get().paintAt;
       forEachLineCell(from.x, from.y, to.x, to.y, (x, y) => paint(x, y));
     },
 
     endStroke: () => {
       const stroke = activeStroke;
-      const blocked = strokeBlocked;
+      const blockReason = strokeBlockReason;
       activeStroke = null;
       strokeTool = null;
-      strokeBlocked = 0;
+      strokeBlockReason = null;
       if (!stroke) return;
       if (!history.commit(stroke)) {
         // 실제로 바뀐 셀이 없으면 히스토리를 더럽히지 않는다.
-        // 다만 보호 격자에 전부 막혀서 그런 것이라면 이유를 알려 준다.
+        // 다만 규칙에 전부 막혀서 그런 것이라면 이유를 알려 준다.
         set({
           canUndo: history.canUndo,
           canRedo: history.canRedo,
-          ...(blocked > 0
-            ? { notice: '중앙 기준 2칸 간격 칸에는 통행 불가 타일을 놓을 수 없습니다.' }
-            : {}),
+          ...(blockReason ? { notice: blockReason } : {}),
         });
         return;
       }
@@ -305,6 +390,19 @@ export const useEditorStore = create<EditorState>()((set, get) => {
       afterMutation(next);
     },
 
+    generateMaze: () => {
+      const { doc } = get();
+      const { brushes } = useBrushStore.getState();
+      const result = generateMazePreview(doc, brushes);
+      if (result.seedCount === 0) {
+        set({ notice: '엔티티 타입이 Seed인 브러쉬가 없어 미로를 생성할 수 없습니다.' });
+        return;
+      }
+      set({ mazePreview: result.terrainType, notice: `미로 생성 미리보기 · Seed ${result.seedCount}개` });
+    },
+
+    exitMazePreview: () => set({ mazePreview: null }),
+
     newDoc: (width, height, name) => {
       const doc = createDoc(width, height, { name: name || '새 맵' });
       fileHandle = null;
@@ -312,11 +410,11 @@ export const useEditorStore = create<EditorState>()((set, get) => {
       scheduleAutosave(doc);
     },
 
-    resize: (width, height, anchor, borderWalls) => {
+    resize: (width, height, anchor) => {
       const prev = get().doc;
       const w = normalizeMapSize(width);
       const h = normalizeMapSize(height);
-      const next = resizeDoc(prev, w, h, { anchor, borderWalls });
+      const next = resizeDoc(prev, w, h, { anchor });
 
       // 결과가 이전과 완전히 같으면 되돌릴 것 없는 히스토리 항목을 남기지 않는다.
       if (sameGrid(prev, next)) {

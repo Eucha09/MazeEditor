@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { CellPos } from '@/core/types';
-import { tilesetIndex } from '@/core/tileset';
 import { computeFit, useEditorStore } from '@/store/editorStore';
+import { useBrushStore } from '@/store/brushStore';
 import { screenToCell } from './camera';
 import { renderMap } from './renderer';
 
@@ -17,6 +17,11 @@ type DragMode = 'idle' | 'paint' | 'pan';
 export function CanvasView() {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // 배너는 자주 바뀌지 않으므로 캔버스처럼 직접 그리지 않고 평범한 React 구독으로 둔다.
+  const previewing = useEditorStore((s) => s.mazePreview !== null);
+  const generateMaze = useEditorStore((s) => s.generateMaze);
+  const exitMazePreview = useEditorStore((s) => s.exitMazePreview);
 
   const needsDraw = useRef(true);
   const size = useRef({ w: 0, h: 0 });
@@ -39,15 +44,27 @@ export function CanvasView() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     const s = useEditorStore.getState();
-    const activeTile = tilesetIndex(s.doc.tileset).get(s.activeTileId);
+    const { brushes, activeBrushId } = useBrushStore.getState();
+    const brush = brushes.find((b) => b.id === activeBrushId);
     renderMap(ctx, w, h, {
       doc: s.doc,
       camera: s.camera,
       showGrid: s.showGrid,
-      hover: s.hover,
-      brushSize: s.brushSize,
+      // 미리보기 중에는 칠할 수 없으므로 브러쉬 커서를 보여 주지 않는다.
+      hover: s.mazePreview ? null : s.hover,
       tool: s.tool,
-      blockSolid: s.tool === 'brush' && activeTile?.solid === true,
+      brushes,
+      // 채우기는 실제로 바뀔 영역이 클릭 전까지 알 수 없으므로(맵 전체일 수도 있다)
+      // 미리보기를 계산하지 않고 클릭할 한 칸만 보여 준다.
+      cursorSize: s.tool === 'fill' ? 1 : (brush?.size ?? 1),
+      activeAllowedKinds:
+        s.tool === 'brush'
+          ? (brush?.allowedCellKinds ?? null)
+          : // 채우기를 지원하지 않는 브러쉬라면 빈 배열을 줘서 클릭하기 전에도 막힌 칸처럼 보이게 한다.
+            s.tool === 'fill' && brush && !brush.fillable
+            ? []
+            : null,
+      mazePreview: s.mazePreview,
     });
   }, []);
 
@@ -87,10 +104,14 @@ export function CanvasView() {
     return () => ro.disconnect();
   }, [tryFit]);
 
-  // 스토어가 바뀌면 다음 프레임에 다시 그린다.
-  useEffect(() => useEditorStore.subscribe(() => {
-    needsDraw.current = true;
-  }), []);
+  // 스토어가 바뀌면 다음 프레임에 다시 그린다. 브러쉬 색·크기도 화면에 반영된다.
+  useEffect(() => {
+    const markDirty = () => {
+      needsDraw.current = true;
+    };
+    const unsubs = [useEditorStore.subscribe(markDirty), useBrushStore.subscribe(markDirty)];
+    return () => unsubs.forEach((off) => off());
+  }, []);
 
   useEffect(() => {
     let raf = 0;
@@ -168,6 +189,8 @@ export function CanvasView() {
     }
 
     if (e.button !== 0 && e.button !== 2) return;
+    // 미리보기 중에는 실제 문서를 칠할 수 없다. 미리보기를 끄고 다시 그려야 한다.
+    if (store.mazePreview !== null) return;
 
     mode.current = 'paint';
     const cell = cellAt(e);
@@ -211,7 +234,7 @@ export function CanvasView() {
     <div ref={containerRef} className="relative h-full w-full overflow-hidden">
       <canvas
         ref={canvasRef}
-        className="block cursor-crosshair touch-none select-none"
+        className={`block touch-none select-none ${previewing ? 'cursor-default' : 'cursor-crosshair'}`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
@@ -219,6 +242,27 @@ export function CanvasView() {
         onPointerLeave={() => useEditorStore.getState().setHover(null)}
         onContextMenu={(e) => e.preventDefault()}
       />
+      {previewing && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center p-2">
+          <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-teal-400/40 bg-panel-2/95 px-3 py-1.5 text-xs shadow-lg">
+            <span className="text-teal-300">미로 생성 미리보기 · 저장되지 않습니다</span>
+            <button
+              type="button"
+              onClick={generateMaze}
+              className="rounded-full bg-white/10 px-2 py-0.5 text-ink-dim transition-colors hover:bg-white/20 hover:text-ink"
+            >
+              다시 생성
+            </button>
+            <button
+              type="button"
+              onClick={exitMazePreview}
+              className="rounded-full bg-white/10 px-2 py-0.5 text-ink-dim transition-colors hover:bg-white/20 hover:text-ink"
+            >
+              종료
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,23 +1,37 @@
-import type { CellPos, MapDoc, TileDef, TileId, ToolId } from '@/core/types';
-import { tilesetIndex } from '@/core/tileset';
+import type { CellKind, CellPos, MapDoc, ToolId } from '@/core/types';
+import { TERRAIN_EMPTY, TERRAIN_NONE, TERRAIN_WALL } from '@/core/types';
+import type { Brush } from '@/core/brush';
+import { brushColor, brushIndex, findBrushById } from '@/core/brush';
 import { forEachBrushCell } from '@/core/tools/brush';
-import { centerCell, isProtectedCell } from '@/core/lattice';
+import { centerCell, cellKind } from '@/core/lattice';
+import { getLayer } from '@/core/tilemap';
 import type { Camera } from './camera';
 
 const BG = '#12151c';
 const MAP_BORDER = '#39414f';
+const MAP_BORDER_PREVIEW = 'rgba(94,234,212,0.85)';
 const GRID_MINOR = 'rgba(255,255,255,0.055)';
 const GRID_MAJOR = 'rgba(255,255,255,0.13)';
 const HOVER_STROKE = 'rgba(255,255,255,0.85)';
 const ERASER_STROKE = 'rgba(248,113,113,0.9)';
+const FILL_STROKE = 'rgba(94,234,212,0.9)';
 const BLOCKED_STROKE = 'rgba(248,113,113,0.95)';
 const LATTICE = 'rgba(110,168,254,0.42)';
+/** 브러쉬가 지워졌는데 맵에는 남아 있는 오브젝트. */
+const UNKNOWN_OBJECT = '#8b93a5';
+
+/** 지형 타입만으로 정해지는 기본 칸 색. 브러쉬를 찾을 수 있으면 브러쉬 색이 우선한다. */
+const TERRAIN_COLOR: Record<number, string> = {
+  [TERRAIN_NONE]: '#171a21',
+  [TERRAIN_EMPTY]: '#232834',
+  [TERRAIN_WALL]: '#6b7689',
+};
 
 /** 이 크기보다 셀이 작아지면 격자선이 셀을 덮어버리므로 그리지 않는다. */
 const GRID_MIN_SCALE = 9;
 const MAJOR_EVERY = 5;
 
-/** 보호 격자 점은 이보다 작아지면 알아보기 어려워 그리지 않는다. */
+/** floor 칸 표시는 이보다 작아지면 알아보기 어려워 그리지 않는다. */
 const LATTICE_MIN_SCALE = 7;
 
 export interface RenderState {
@@ -25,10 +39,17 @@ export interface RenderState {
   camera: Camera;
   showGrid: boolean;
   hover: CellPos | null;
-  brushSize: number;
   tool: ToolId;
-  /** 지금 선택된 타일이 통행 불가라서 보호 격자에 놓을 수 없는 상태인지 */
-  blockSolid: boolean;
+  brushes: Brush[];
+  /** 커서가 덮는 크기. 선택된 브러쉬의 크기를 그대로 쓴다. */
+  cursorSize: number;
+  /** 지금 선택된 브러쉬가 놓일 수 있는 칸 종류. 브러쉬 도구가 아니면 null. */
+  activeAllowedKinds: CellKind[] | null;
+  /**
+   * 미로 생성 미리보기 지형 타입 격자. null이 아니면 doc.terrainType 대신 이
+   * 값으로 지형 색을 정한다 — 오브젝트·브러쉬 표시(엔티티 등)는 그대로 doc을 쓴다.
+   */
+  mazePreview: Uint8Array | null;
 }
 
 /** 셀 경계를 정수 픽셀에 맞춰 인접 셀 사이에 실틈이 보이지 않게 한다. */
@@ -42,8 +63,9 @@ export function renderMap(
   viewH: number,
   state: RenderState,
 ): void {
-  const { doc, camera, showGrid, hover, brushSize, tool, blockSolid } = state;
-  const tiles = tilesetIndex(doc.tileset);
+  const { doc, camera, showGrid, hover, tool, brushes, cursorSize, activeAllowedKinds, mazePreview } = state;
+  const index = brushIndex(brushes);
+  const terrainType = mazePreview ?? doc.terrainType;
 
   ctx.fillStyle = BG;
   ctx.fillRect(0, 0, viewW, viewH);
@@ -54,38 +76,56 @@ export function renderMap(
   const x1 = Math.min(doc.width - 1, Math.floor((viewW - camera.ox) / camera.scale));
   const y1 = Math.min(doc.height - 1, Math.floor((viewH - camera.oy) / camera.scale));
 
-  for (const layer of doc.layers) {
-    if (!layer.visible) continue;
+  const terrainBrushIds = getLayer(doc, 'terrain').brush;
+  const entityObject = getLayer(doc, 'entity').object;
+  const entityBrushIds = getLayer(doc, 'entity').brush;
+  const terrainVisible = getLayer(doc, 'terrain').visible;
+  const entityVisible = getLayer(doc, 'entity').visible;
 
-    // 레이어 기본 타일은 배경으로 한 번에 칠하고, 셀 순회에서는 건너뛴다.
-    const base: TileDef | undefined = tiles.get(layer.defaultTile);
-    if (base) {
-      ctx.fillStyle = base.color;
-      const bx = edge(camera.ox, 0, camera.scale);
-      const by = edge(camera.oy, 0, camera.scale);
-      ctx.fillRect(bx, by, edge(camera.ox, doc.width, camera.scale) - bx, edge(camera.oy, doc.height, camera.scale) - by);
-    }
+  // 미정(None) 칸은 배경으로 한 번에 칠하고, 셀 순회에서는 건너뛴다.
+  const bx = edge(camera.ox, 0, camera.scale);
+  const by = edge(camera.oy, 0, camera.scale);
+  ctx.fillStyle = TERRAIN_COLOR[TERRAIN_NONE];
+  ctx.fillRect(
+    bx,
+    by,
+    edge(camera.ox, doc.width, camera.scale) - bx,
+    edge(camera.oy, doc.height, camera.scale) - by,
+  );
 
-    const isEntity = layer.key === 'entity';
-    for (let y = y0; y <= y1; y++) {
-      const row = y * doc.width;
-      const sy = edge(camera.oy, y, camera.scale);
-      const h = edge(camera.oy, y + 1, camera.scale) - sy;
-      for (let x = x0; x <= x1; x++) {
-        const id: TileId = layer.data[row + x];
-        if (id === layer.defaultTile) continue;
-        const def = tiles.get(id);
-        if (!def) continue;
+  for (let y = y0; y <= y1; y++) {
+    const row = y * doc.width;
+    const sy = edge(camera.oy, y, camera.scale);
+    const h = edge(camera.oy, y + 1, camera.scale) - sy;
 
-        const sx = edge(camera.ox, x, camera.scale);
-        const w = edge(camera.ox, x + 1, camera.scale) - sx;
-        ctx.fillStyle = def.color;
-        if (isEntity) {
+    for (let x = x0; x <= x1; x++) {
+      const i = row + x;
+      const sx = edge(camera.ox, x, camera.scale);
+      const w = edge(camera.ox, x + 1, camera.scale) - sx;
+
+      if (terrainVisible) {
+        const type = terrainType[i];
+        // 미리보기 중에는 지형 타입이 실제 문서와 달라질 수 있으므로, 그 칸에
+        // 놓인 브러쉬 색은 지형 타입이 그대로일 때만 보여 준다. 안 그러면 예를
+        // 들어 브러쉬로 칠한 Wall이 미리보기에서 Empty로 바뀌었는데도 여전히
+        // 벽 브러쉬 색으로 보이는 식의 혼란이 생긴다.
+        const brushId = mazePreview && type !== doc.terrainType[i] ? 0 : terrainBrushIds[i];
+        if (type !== TERRAIN_NONE || brushId !== 0) {
+          const brush = findBrushById(index, brushId);
+          ctx.fillStyle = brush ? brushColor(brush) : (TERRAIN_COLOR[type] ?? UNKNOWN_OBJECT);
+          ctx.fillRect(sx, sy, w, h);
+        }
+      }
+
+      if (entityVisible) {
+        const objectId = entityObject[i];
+        const brushId = entityBrushIds[i];
+        if (objectId !== 0 || brushId !== 0) {
+          const brush = findBrushById(index, brushId);
+          ctx.fillStyle = brush ? brushColor(brush) : UNKNOWN_OBJECT;
           // 엔티티는 지형 위에 겹쳐 놓이므로 안쪽으로 줄여 아래 지형이 보이게 한다.
           const inset = Math.max(1, Math.round(Math.min(w, h) * 0.2));
           drawInset(ctx, sx + inset, sy + inset, w - inset * 2, h - inset * 2);
-        } else {
-          ctx.fillRect(sx, sy, w, h);
         }
       }
     }
@@ -99,10 +139,10 @@ export function renderMap(
     drawLattice(ctx, doc, camera, x0, y0, x1, y1);
   }
 
-  drawMapBorder(ctx, doc, camera);
+  drawMapBorder(ctx, doc, camera, mazePreview !== null);
 
   if (hover) {
-    drawBrushCursor(ctx, doc, camera, hover, brushSize, tool, blockSolid);
+    drawBrushCursor(ctx, doc, camera, hover, cursorSize, tool, activeAllowedKinds);
   }
 }
 
@@ -149,7 +189,7 @@ function drawGrid(
 }
 
 /**
- * 보호 격자 표시.
+ * floor 칸 표시.
  * 이 점이 찍힌 칸은 항상 지나갈 수 있어야 하므로 통행 불가 타일을 놓을 수 없다.
  * 브러쉬가 왜 칠해지지 않는지 알 수 있도록 눈에 보이게 그린다.
  */
@@ -180,11 +220,11 @@ function drawLattice(
   ctx.fill();
 }
 
-function drawMapBorder(ctx: CanvasRenderingContext2D, doc: MapDoc, cam: Camera): void {
+function drawMapBorder(ctx: CanvasRenderingContext2D, doc: MapDoc, cam: Camera, preview: boolean): void {
   const x = edge(cam.ox, 0, cam.scale) + 0.5;
   const y = edge(cam.oy, 0, cam.scale) + 0.5;
-  ctx.strokeStyle = MAP_BORDER;
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = preview ? MAP_BORDER_PREVIEW : MAP_BORDER;
+  ctx.lineWidth = preview ? 2 : 1;
   ctx.strokeRect(x, y, edge(cam.ox, doc.width, cam.scale) - x, edge(cam.oy, doc.height, cam.scale) - y);
 }
 
@@ -193,16 +233,17 @@ function drawBrushCursor(
   doc: MapDoc,
   cam: Camera,
   hover: CellPos,
-  brushSize: number,
+  cursorSize: number,
   tool: ToolId,
-  blockSolid: boolean,
+  activeAllowedKinds: CellKind[] | null,
 ): void {
   const free: CellPos[] = [];
   const blocked: CellPos[] = [];
 
-  forEachBrushCell(hover.x, hover.y, brushSize, (x, y) => {
+  forEachBrushCell(hover.x, hover.y, cursorSize, (x, y) => {
     if (x < 0 || y < 0 || x >= doc.width || y >= doc.height) return;
-    (blockSolid && isProtectedCell(doc, x, y) ? blocked : free).push({ x, y });
+    const isBlocked = activeAllowedKinds !== null && !activeAllowedKinds.includes(cellKind(doc, x, y));
+    (isBlocked ? blocked : free).push({ x, y });
   });
 
   const outline = (cells: CellPos[], color: string) => {
@@ -218,6 +259,7 @@ function drawBrushCursor(
     ctx.stroke();
   };
 
-  outline(free, tool === 'eraser' ? ERASER_STROKE : HOVER_STROKE);
+  const strokeColor = tool === 'eraser' ? ERASER_STROKE : tool === 'fill' ? FILL_STROKE : HOVER_STROKE;
+  outline(free, strokeColor);
   outline(blocked, BLOCKED_STROKE);
 }

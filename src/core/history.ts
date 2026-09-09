@@ -1,5 +1,5 @@
-import type { LayerKey, MapDoc, TileId } from './types';
-import { getLayer } from './tilemap';
+import type { GridId, MapDoc } from './types';
+import { getGrid } from './tilemap';
 
 /**
  * 델타 기반 Undo/Redo.
@@ -9,10 +9,10 @@ import { getLayer } from './tilemap';
  * 비례하므로 200x200 같은 맵에서도 즉각적으로 동작한다.
  */
 export interface CellChange {
-  layer: LayerKey;
+  grid: GridId;
   index: number;
-  before: TileId;
-  after: TileId;
+  before: number;
+  after: number;
 }
 
 export interface Stroke {
@@ -79,7 +79,7 @@ export class History {
     // 같은 셀을 여러 번 덮어쓴 경우가 있으므로 역순으로 되돌린다.
     for (let i = entry.changes.length - 1; i >= 0; i--) {
       const c = entry.changes[i];
-      getLayer(doc, c.layer).data[c.index] = c.before;
+      getGrid(doc, c.grid)[c.index] = c.before;
     }
     return doc;
   }
@@ -93,7 +93,7 @@ export class History {
     if (entry.kind === 'doc') return entry.after;
 
     for (const c of entry.changes) {
-      getLayer(doc, c.layer).data[c.index] = c.after;
+      getGrid(doc, c.grid)[c.index] = c.after;
     }
     return doc;
   }

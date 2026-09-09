@@ -4,47 +4,74 @@
  * 게임 런타임에서 그대로 재사용할 수 있도록 유지할 것.
  */
 
-/** 타일 ID. 0은 "비어있음"으로 예약되어 있다. */
-export type TileId = number;
+/**
+ * 지형 타입. 게임의 통행 판정 기준이며 맵 파일에 그대로 저장된다.
+ *  - None: 아직 정해지지 않음 (미로 생성 알고리즘이 채울 예정)
+ *  - Empty: 지나갈 수 있음
+ *  - Wall: 지나갈 수 없음
+ */
+export const TERRAIN_NONE = 0;
+export const TERRAIN_EMPTY = 1;
+export const TERRAIN_WALL = 2;
+export type TerrainType = typeof TERRAIN_NONE | typeof TERRAIN_EMPTY | typeof TERRAIN_WALL;
+
+export const TERRAIN_TYPES: TerrainType[] = [TERRAIN_NONE, TERRAIN_EMPTY, TERRAIN_WALL];
+
+export const TERRAIN_TYPE_NAME: Record<TerrainType, string> = {
+  [TERRAIN_NONE]: 'None (미정)',
+  [TERRAIN_EMPTY]: 'Empty (통행 가능)',
+  [TERRAIN_WALL]: 'Wall (통행 불가)',
+};
 
 export type LayerKey = 'terrain' | 'entity';
 
-export interface TileDef {
-  id: TileId;
-  /** 코드에서 참조할 안정적인 식별자 */
-  key: string;
-  /** UI 표시용 이름 */
-  name: string;
-  color: string;
-  /** 게임에서 통과할 수 없는 타일인지 */
-  solid: boolean;
-  /** 맵에 하나만 존재할 수 있는 타일 (시작 지점, 목표 지점) */
-  unique: boolean;
-  /** 이 타일이 찍히는 레이어 */
-  layer: LayerKey;
-}
+/**
+ * 중앙 기준 격자 위치에 따른 칸 종류. (lattice.ts의 cellKind 참고)
+ *  - floor: 중앙과 가로·세로 모두 2칸 간격인 칸. 항상 지나갈 수 있어야 한다.
+ *  - wall: floor 칸들 사이에 있는 칸. 통로를 막는 벽 한 칸.
+ *  - pillar: wall 칸들 사이, 즉 floor 네 칸이 대각선으로 맞닿는 교차점.
+ */
+export type CellKind = 'floor' | 'wall' | 'pillar';
+
+/** 게임에서 참조할 오브젝트 ID. 0은 "오브젝트 없음". */
+export type ObjectId = number;
+
+/** 브러쉬 정의의 정수 식별자. 0은 "브러쉬로 칠해진 적 없음". (core/brush.ts 참고) */
+export type BrushId = number;
 
 export interface Layer {
   key: LayerKey;
-  name: string;
   visible: boolean;
-  /** 지우개가 이 레이어에 써 넣는 값 */
-  defaultTile: TileId;
-  /** 길이 width * height. index = y * width + x */
-  data: Uint16Array;
+  /** 길이 width * height. index = y * width + x. 0이면 오브젝트 없음. */
+  object: Uint32Array;
+  /**
+   * 이 칸을 찍은 브러쉬의 id. 게임은 쓰지 않는 에디터 전용 메타데이터로,
+   * 같은 오브젝트 ID를 여러 브러쉬가 공유해도 어떤 브러쉬였는지 정확히 추적하고
+   * (호버 정보, unique 브러쉬 재배치 시 이전 칸 찾기), 맵을 다시 열었을 때 어떤
+   * 브러쉬로 칠했는지 알 수 있게 한다.
+   */
+  brush: Uint32Array;
 }
 
 export interface MapDoc {
   name: string;
   width: number;
   height: number;
-  tileset: TileDef[];
+  /** 지형 타입 격자. terrain 레이어에 대응하며 entity 레이어에는 없다. */
+  terrainType: Uint8Array;
   layers: Layer[];
 }
+
+/**
+ * 편집 대상이 되는 격자의 식별자.
+ * 히스토리가 "어느 격자의 몇 번 칸이 무엇에서 무엇으로 바뀌었는지"만 기록하면
+ * 되도록, 문서 안의 모든 격자에 이름을 붙여 둔다.
+ */
+export type GridId = 'terrainType' | 'terrainObject' | 'terrainBrush' | 'entityObject' | 'entityBrush';
 
 export interface CellPos {
   x: number;
   y: number;
 }
 
-export type ToolId = 'brush' | 'eraser';
+export type ToolId = 'brush' | 'eraser' | 'fill';
