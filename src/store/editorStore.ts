@@ -216,14 +216,17 @@ export const useEditorStore = create<EditorState>()((set, get) => {
       return;
     }
 
+    // 칸 종류 제한은 클릭한 칸(중심)에 대해서만 따진다. 브러쉬 크기가 3 이상이면
+    // 정사각형 범위가 floor·wall·pillar를 전부 걸치기 마련이라, 칸마다 따로
+    // 검사하면 세 종류를 모두 허용한 브러쉬가 아닌 이상 범위 일부가 잘려 나간다.
+    if (inBounds(doc, cx, cy) && !isCellAllowed(doc, brush, cx, cy)) {
+      strokeBlockReason = REJECTION_MESSAGE['cell-kind'];
+      return;
+    }
+
     if (brush.unique) clearPreviousUnique(doc, brush);
     forEachBrushCell(cx, cy, brush.size, (x, y) => {
       if (!inBounds(doc, x, y)) return;
-      // 놓을 수 없는 칸 종류는 건너뛴다. 브러쉬의 나머지 칸은 정상적으로 칠한다.
-      if (!isCellAllowed(doc, brush, x, y)) {
-        strokeBlockReason = REJECTION_MESSAGE['cell-kind'];
-        return;
-      }
       writeBrushCell(doc, brush, x, y, objectIdFor(brush, cellKind(doc, x, y)), brush.id);
     });
   }

@@ -25,8 +25,10 @@ function half(size: number): number {
 /**
  * 덩어리 브러쉬를 (cx, cy)에 놓을 수 있는지 본다.
  *
- * 덩어리는 통째로 하나의 오브젝트이므로 일부만 걸치는 배치를 허용하지 않는다.
- * 맵 밖으로 나가거나, 한 칸이라도 놓을 수 없는 칸 종류에 걸치면 전체가 거부된다.
+ * 덩어리는 통째로 하나의 오브젝트이므로 일부만 걸치는 배치를 허용하지 않는다 —
+ * 맵 밖으로 나가면 전체가 거부된다. 칸 종류 제한은 클릭한 가운데 칸에 대해서만
+ * 따진다 — 정사각형 범위는 크기가 3 이상이면 floor·wall·pillar를 전부 걸치기
+ * 마련이라, 몸통 칸까지 검사하면 세 종류를 모두 허용한 덩어리만 놓을 수 있게 된다.
  * 놓을 수 있으면 null을 반환한다.
  */
 export function checkBlobPlacement(
@@ -36,13 +38,12 @@ export function checkBlobPlacement(
   cx: number,
   cy: number,
 ): PlaceRejection | null {
-  let rejection: PlaceRejection | null = null;
+  let outOfBounds = false;
   forEachBrushCell(cx, cy, brush.size, (x, y) => {
-    if (rejection) return;
-    if (!inBounds(doc, x, y)) rejection = 'out-of-bounds';
-    else if (!isCellAllowed(doc, brush, x, y)) rejection = 'cell-kind';
+    if (!inBounds(doc, x, y)) outOfBounds = true;
   });
-  if (rejection) return rejection;
+  if (outOfBounds) return 'out-of-bounds';
+  if (!isCellAllowed(doc, brush, cx, cy)) return 'cell-kind';
 
   return hasBlobConflict(doc, brushes, brush, cx, cy) ? 'blob-overlap' : null;
 }

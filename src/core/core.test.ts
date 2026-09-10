@@ -476,11 +476,14 @@ describe('덩어리 브러쉬 배치', () => {
     expect(checkBlobPlacement(doc, [blob3], blob3, 5, 5)).toBeNull();
   });
 
-  it('한 칸이라도 놓을 수 없는 칸 종류에 걸치면 거부된다', () => {
-    const doc = createDoc(11, 11);
-    // 3x3은 floor/wall/pillar를 모두 덮으므로 floor를 빼면 어디에도 놓을 수 없다.
+  it('칸 종류 제한은 클릭한 가운데 칸만 본다 — 몸통이 다른 종류를 걸쳐도 된다', () => {
+    const doc = createDoc(11, 11); // 중앙 (5,5)는 floor, (4,5)는 wall 칸이다.
     const noFloor = makeBrush({ ...blob3, allowedCellKinds: ['wall', 'pillar'] });
+
+    // 가운데가 floor면 floor를 허용하지 않는 브러쉬로는 놓을 수 없다.
     expect(checkBlobPlacement(doc, [noFloor], noFloor, 5, 5)).toBe('cell-kind');
+    // 가운데를 wall 칸으로 옮기면, 3x3 몸통이 floor·pillar 칸도 걸치지만 놓을 수 있다.
+    expect(checkBlobPlacement(doc, [noFloor], noFloor, 4, 5)).toBeNull();
   });
 
   it('이미 놓인 덩어리와 맞닿으면 거부되고, 한 칸 떨어지면 놓을 수 있다', () => {

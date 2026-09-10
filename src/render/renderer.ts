@@ -237,29 +237,31 @@ function drawBrushCursor(
   tool: ToolId,
   activeAllowedKinds: CellKind[] | null,
 ): void {
-  const free: CellPos[] = [];
-  const blocked: CellPos[] = [];
+  // 칸 종류 제한은 실제 배치와 마찬가지로 클릭할 가운데 칸(hover) 기준으로만
+  // 본다 — 브러쉬 크기가 3 이상이면 범위 전체가 floor·wall·pillar를 다 걸치므로,
+  // 칸마다 따로 판정하면 커서가 절반쯤 빨갛게 보이는데 실제로는 다 칠해진다.
+  const blocked = activeAllowedKinds !== null && !activeAllowedKinds.includes(cellKind(doc, hover.x, hover.y));
 
+  const cells: CellPos[] = [];
   forEachBrushCell(hover.x, hover.y, cursorSize, (x, y) => {
     if (x < 0 || y < 0 || x >= doc.width || y >= doc.height) return;
-    const isBlocked = activeAllowedKinds !== null && !activeAllowedKinds.includes(cellKind(doc, x, y));
-    (isBlocked ? blocked : free).push({ x, y });
+    cells.push({ x, y });
   });
+  if (cells.length === 0) return;
 
-  const outline = (cells: CellPos[], color: string) => {
-    if (cells.length === 0) return;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (const cell of cells) {
-      const sx = edge(cam.ox, cell.x, cam.scale) + 0.5;
-      const sy = edge(cam.oy, cell.y, cam.scale) + 0.5;
-      ctx.rect(sx, sy, edge(cam.ox, cell.x + 1, cam.scale) - sx, edge(cam.oy, cell.y + 1, cam.scale) - sy);
-    }
-    ctx.stroke();
-  };
-
-  const strokeColor = tool === 'eraser' ? ERASER_STROKE : tool === 'fill' ? FILL_STROKE : HOVER_STROKE;
-  outline(free, strokeColor);
-  outline(blocked, BLOCKED_STROKE);
+  ctx.strokeStyle = blocked
+    ? BLOCKED_STROKE
+    : tool === 'eraser'
+      ? ERASER_STROKE
+      : tool === 'fill'
+        ? FILL_STROKE
+        : HOVER_STROKE;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (const cell of cells) {
+    const sx = edge(cam.ox, cell.x, cam.scale) + 0.5;
+    const sy = edge(cam.oy, cell.y, cam.scale) + 0.5;
+    ctx.rect(sx, sy, edge(cam.ox, cell.x + 1, cam.scale) - sx, edge(cam.oy, cell.y + 1, cam.scale) - sy);
+  }
+  ctx.stroke();
 }
