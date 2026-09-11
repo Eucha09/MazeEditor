@@ -264,14 +264,14 @@
       "objectIds": {
         "floor": 0,
         "wall": 0,
-        "pillar": 2
+        "pillar": -2
       },
       "unique": false,
       "size": 3,
       "blob": true,
       "fillable": false,
       "color": null,
-      "previewModel": "default"
+      "previewModel": "statue"
     },
     {
       "id": 16,
@@ -673,94 +673,6 @@
       "previewModel": "default"
     },
     {
-      "id": 35,
-      "name": "사슴1",
-      "group": "엔티티",
-      "layer": "entity",
-      "terrainType": 0,
-      "entityType": "monster",
-      "allowedCellKinds": [
-        "floor"
-      ],
-      "objectIds": {
-        "floor": 101,
-        "wall": 0,
-        "pillar": 0
-      },
-      "unique": false,
-      "size": 1,
-      "blob": false,
-      "fillable": false,
-      "color": null,
-      "previewModel": "monster"
-    },
-    {
-      "id": 36,
-      "name": "사슴2",
-      "group": "엔티티",
-      "layer": "entity",
-      "terrainType": 0,
-      "entityType": "monster",
-      "allowedCellKinds": [
-        "floor"
-      ],
-      "objectIds": {
-        "floor": 102,
-        "wall": 0,
-        "pillar": 0
-      },
-      "unique": false,
-      "size": 1,
-      "blob": false,
-      "fillable": false,
-      "color": null,
-      "previewModel": "monster"
-    },
-    {
-      "id": 37,
-      "name": "사슴3",
-      "group": "엔티티",
-      "layer": "entity",
-      "terrainType": 0,
-      "entityType": "monster",
-      "allowedCellKinds": [
-        "floor"
-      ],
-      "objectIds": {
-        "floor": 103,
-        "wall": 0,
-        "pillar": 0
-      },
-      "unique": false,
-      "size": 1,
-      "blob": false,
-      "fillable": false,
-      "color": null,
-      "previewModel": "monster"
-    },
-    {
-      "id": 38,
-      "name": "사슴4",
-      "group": "엔티티",
-      "layer": "entity",
-      "terrainType": 0,
-      "entityType": "monster",
-      "allowedCellKinds": [
-        "floor"
-      ],
-      "objectIds": {
-        "floor": 104,
-        "wall": 0,
-        "pillar": 0
-      },
-      "unique": false,
-      "size": 1,
-      "blob": false,
-      "fillable": false,
-      "color": null,
-      "previewModel": "monster"
-    },
-    {
       "id": 39,
       "name": "늑대1",
       "group": "엔티티",
@@ -956,7 +868,7 @@
       "blob": false,
       "fillable": false,
       "color": null,
-      "previewModel": "monster"
+      "previewModel": "golem"
     },
     {
       "id": 48,
@@ -978,7 +890,7 @@
       "blob": false,
       "fillable": false,
       "color": null,
-      "previewModel": "monster"
+      "previewModel": "golem"
     },
     {
       "id": 49,
@@ -1000,7 +912,7 @@
       "blob": false,
       "fillable": false,
       "color": null,
-      "previewModel": "monster"
+      "previewModel": "golem"
     },
     {
       "id": 50,
@@ -1022,7 +934,7 @@
       "blob": false,
       "fillable": false,
       "color": null,
-      "previewModel": "monster"
+      "previewModel": "golem"
     },
     {
       "id": 51,
@@ -1044,7 +956,7 @@
       "blob": false,
       "fillable": false,
       "color": null,
-      "previewModel": "monster"
+      "previewModel": "plant"
     },
     {
       "id": 52,
@@ -1066,7 +978,7 @@
       "blob": false,
       "fillable": false,
       "color": null,
-      "previewModel": "monster"
+      "previewModel": "plant"
     },
     {
       "id": 53,
@@ -1088,7 +1000,7 @@
       "blob": false,
       "fillable": false,
       "color": null,
-      "previewModel": "monster"
+      "previewModel": "plant"
     },
     {
       "id": 54,
@@ -1110,7 +1022,7 @@
       "blob": false,
       "fillable": false,
       "color": null,
-      "previewModel": "monster"
+      "previewModel": "plant"
     }
   ]
 }
