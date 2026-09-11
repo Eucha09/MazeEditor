@@ -60,7 +60,7 @@
         "floor"
       ],
       "objectIds": {
-        "floor": 0,
+        "floor": -1,
         "wall": 0,
         "pillar": 0
       },
