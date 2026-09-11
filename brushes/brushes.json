@@ -1,0 +1,1116 @@
+{
+  "format": "maze-editor-brushes",
+  "version": 4,
+  "brushes": [
+    {
+      "id": 1,
+      "name": "바닥",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor",
+        "wall",
+        "pillar"
+      ],
+      "objectIds": {
+        "floor": 1,
+        "wall": 2,
+        "pillar": 3
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": true,
+      "color": null,
+      "previewModel": "default"
+    },
+    {
+      "id": 2,
+      "name": "벽",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 2,
+      "entityType": null,
+      "allowedCellKinds": [
+        "wall",
+        "pillar"
+      ],
+      "objectIds": {
+        "floor": 0,
+        "wall": 2,
+        "pillar": 3
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "default"
+    },
+    {
+      "id": 7,
+      "name": "Seed",
+      "group": "엔티티",
+      "layer": "entity",
+      "terrainType": 0,
+      "entityType": "seed",
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 0,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "default"
+    },
+    {
+      "id": 8,
+      "name": "외곽벽",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 2,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor",
+        "wall",
+        "pillar"
+      ],
+      "objectIds": {
+        "floor": 4,
+        "wall": 5,
+        "pillar": 6
+      },
+      "unique": false,
+      "size": 3,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "outer-wall"
+    },
+    {
+      "id": 12,
+      "name": "시작",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 8,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": true,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#00ff91",
+      "previewModel": "start-area"
+    },
+    {
+      "id": 9,
+      "name": "안전지역",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 1,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 9,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 5,
+      "blob": true,
+      "fillable": false,
+      "color": "#1db4b1",
+      "previewModel": "safe-area"
+    },
+    {
+      "id": 10,
+      "name": "안전지역 벽",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 2,
+      "entityType": null,
+      "allowedCellKinds": [
+        "wall",
+        "pillar"
+      ],
+      "objectIds": {
+        "floor": 0,
+        "wall": 10,
+        "pillar": 11
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "special-wall"
+    },
+    {
+      "id": 11,
+      "name": "안전지역 문",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 2,
+      "entityType": null,
+      "allowedCellKinds": [
+        "wall"
+      ],
+      "objectIds": {
+        "floor": 0,
+        "wall": 12,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "special-door"
+    },
+    {
+      "id": 13,
+      "name": "보스지역",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 1,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 13,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": true,
+      "size": 5,
+      "blob": true,
+      "fillable": false,
+      "color": "#ba1c1c",
+      "previewModel": "boss-area"
+    },
+    {
+      "id": 14,
+      "name": "보스지역 벽",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 2,
+      "entityType": null,
+      "allowedCellKinds": [
+        "wall",
+        "pillar"
+      ],
+      "objectIds": {
+        "floor": 0,
+        "wall": 14,
+        "pillar": 15
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "special-wall"
+    },
+    {
+      "id": 15,
+      "name": "보스지역 문",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 2,
+      "entityType": null,
+      "allowedCellKinds": [
+        "wall"
+      ],
+      "objectIds": {
+        "floor": 0,
+        "wall": 16,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "special-door"
+    },
+    {
+      "id": 34,
+      "name": "특수지역",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 1,
+      "entityType": null,
+      "allowedCellKinds": [
+        "pillar"
+      ],
+      "objectIds": {
+        "floor": 0,
+        "wall": 0,
+        "pillar": 2
+      },
+      "unique": false,
+      "size": 3,
+      "blob": true,
+      "fillable": false,
+      "color": null,
+      "previewModel": "default"
+    },
+    {
+      "id": 16,
+      "name": "특수지역 벽",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 2,
+      "entityType": null,
+      "allowedCellKinds": [
+        "wall",
+        "pillar"
+      ],
+      "objectIds": {
+        "floor": 0,
+        "wall": 17,
+        "pillar": 18
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "special-wall"
+    },
+    {
+      "id": 17,
+      "name": "특수지역 문",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "wall"
+      ],
+      "objectIds": {
+        "floor": 0,
+        "wall": 19,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "special-door"
+    },
+    {
+      "id": 18,
+      "name": "좁혀오는 벽",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 2,
+      "entityType": null,
+      "allowedCellKinds": [
+        "wall",
+        "pillar"
+      ],
+      "objectIds": {
+        "floor": 0,
+        "wall": 20,
+        "pillar": 21
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "default"
+    },
+    {
+      "id": 19,
+      "name": "쓰러지는 벽",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 2,
+      "entityType": null,
+      "allowedCellKinds": [
+        "wall"
+      ],
+      "objectIds": {
+        "floor": 0,
+        "wall": 22,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "default"
+    },
+    {
+      "id": 20,
+      "name": "함정 트리거",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 1,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 23,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#8e3e3e",
+      "previewModel": "default"
+    },
+    {
+      "id": 21,
+      "name": "함정 복도",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 1,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor",
+        "wall"
+      ],
+      "objectIds": {
+        "floor": 24,
+        "wall": 2,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#885959",
+      "previewModel": "default"
+    },
+    {
+      "id": 22,
+      "name": "별운석",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 31,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#318190",
+      "previewModel": "default"
+    },
+    {
+      "id": 23,
+      "name": "동물",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 32,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#a75f25",
+      "previewModel": "default"
+    },
+    {
+      "id": 24,
+      "name": "마나 버섯",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 33,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#4155a4",
+      "previewModel": "default"
+    },
+    {
+      "id": 25,
+      "name": "원기초",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 34,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#417645",
+      "previewModel": "default"
+    },
+    {
+      "id": 26,
+      "name": "꿀",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 35,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#b5972c",
+      "previewModel": "default"
+    },
+    {
+      "id": 27,
+      "name": "골드",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 36,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#a8b12b",
+      "previewModel": "default"
+    },
+    {
+      "id": 28,
+      "name": "포션 상인",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 51,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#76416b",
+      "previewModel": "default"
+    },
+    {
+      "id": 29,
+      "name": "식재료 상인",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 52,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#714160",
+      "previewModel": "default"
+    },
+    {
+      "id": 30,
+      "name": "희귀품 상인",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 53,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#6f4469",
+      "previewModel": "default"
+    },
+    {
+      "id": 31,
+      "name": "이상한 돌1",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 54,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#436b5c",
+      "previewModel": "default"
+    },
+    {
+      "id": 32,
+      "name": "이상한 돌2",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 55,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#426156",
+      "previewModel": "default"
+    },
+    {
+      "id": 33,
+      "name": "이상한 돌3",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 56,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#436055",
+      "previewModel": "default"
+    },
+    {
+      "id": 35,
+      "name": "사슴1",
+      "group": "엔티티",
+      "layer": "entity",
+      "terrainType": 0,
+      "entityType": "monster",
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 101,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "monster"
+    },
+    {
+      "id": 36,
+      "name": "사슴2",
+      "group": "엔티티",
+      "layer": "entity",
+      "terrainType": 0,
+      "entityType": "monster",
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 102,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "monster"
+    },
+    {
+      "id": 37,
+      "name": "사슴3",
+      "group": "엔티티",
+      "layer": "entity",
+      "terrainType": 0,
+      "entityType": "monster",
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 103,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "monster"
+    },
+    {
+      "id": 38,
+      "name": "사슴4",
+      "group": "엔티티",
+      "layer": "entity",
+      "terrainType": 0,
+      "entityType": "monster",
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 104,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "monster"
+    },
+    {
+      "id": 39,
+      "name": "늑대1",
+      "group": "엔티티",
+      "layer": "entity",
+      "terrainType": 0,
+      "entityType": "monster",
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 109,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "monster"
+    },
+    {
+      "id": 40,
+      "name": "늑대2",
+      "group": "엔티티",
+      "layer": "entity",
+      "terrainType": 0,
+      "entityType": "monster",
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 110,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "monster"
+    },
+    {
+      "id": 41,
+      "name": "늑대3",
+      "group": "엔티티",
+      "layer": "entity",
+      "terrainType": 0,
+      "entityType": "monster",
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 111,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "monster"
+    },
+    {
+      "id": 42,
+      "name": "늑대4",
+      "group": "엔티티",
+      "layer": "entity",
+      "terrainType": 0,
+      "entityType": "monster",
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 112,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "monster"
+    },
+    {
+      "id": 43,
+      "name": "곰1",
+      "group": "엔티티",
+      "layer": "entity",
+      "terrainType": 0,
+      "entityType": "monster",
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 113,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "monster"
+    },
+    {
+      "id": 44,
+      "name": "곰2",
+      "group": "엔티티",
+      "layer": "entity",
+      "terrainType": 0,
+      "entityType": "monster",
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 114,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "monster"
+    },
+    {
+      "id": 45,
+      "name": "곰3",
+      "group": "엔티티",
+      "layer": "entity",
+      "terrainType": 0,
+      "entityType": "monster",
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 115,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "monster"
+    },
+    {
+      "id": 46,
+      "name": "곰4",
+      "group": "엔티티",
+      "layer": "entity",
+      "terrainType": 0,
+      "entityType": "monster",
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 116,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "monster"
+    },
+    {
+      "id": 47,
+      "name": "골렘1",
+      "group": "엔티티",
+      "layer": "entity",
+      "terrainType": 0,
+      "entityType": "monster",
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 121,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "monster"
+    },
+    {
+      "id": 48,
+      "name": "골렘2",
+      "group": "엔티티",
+      "layer": "entity",
+      "terrainType": 0,
+      "entityType": "monster",
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 122,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "monster"
+    },
+    {
+      "id": 49,
+      "name": "골렘3",
+      "group": "엔티티",
+      "layer": "entity",
+      "terrainType": 0,
+      "entityType": "monster",
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 123,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "monster"
+    },
+    {
+      "id": 50,
+      "name": "골렘4",
+      "group": "엔티티",
+      "layer": "entity",
+      "terrainType": 0,
+      "entityType": "monster",
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 124,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "monster"
+    },
+    {
+      "id": 51,
+      "name": "식물1",
+      "group": "엔티티",
+      "layer": "entity",
+      "terrainType": 0,
+      "entityType": "monster",
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 125,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "monster"
+    },
+    {
+      "id": 52,
+      "name": "식물2",
+      "group": "엔티티",
+      "layer": "entity",
+      "terrainType": 0,
+      "entityType": "monster",
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 126,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "monster"
+    },
+    {
+      "id": 53,
+      "name": "식물3",
+      "group": "엔티티",
+      "layer": "entity",
+      "terrainType": 0,
+      "entityType": "monster",
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 127,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "monster"
+    },
+    {
+      "id": 54,
+      "name": "식물4",
+      "group": "엔티티",
+      "layer": "entity",
+      "terrainType": 0,
+      "entityType": "monster",
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 128,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "monster"
+    }
+  ]
+}
