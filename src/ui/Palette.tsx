@@ -104,9 +104,11 @@ export function Palette({ width, onAddBrush, onEditBrush }: PaletteProps) {
   const select = (brush: Brush) => {
     setActiveBrush(brush.id);
     // 채우기 도구를 골라 둔 채로 브러쉬만 바꾸려는 경우가 있으므로, 채우기 중에는
-    // 도구를 브러쉬로 되돌리지 않는다. 지우개는 활성 브러쉬와 무관하게 동작하므로
-    // 브러쉬를 고르면 곧바로 칠하려는 의도로 보고 브러쉬 도구로 바꾼다.
-    if (tool !== 'fill') setTool('brush');
+    // 도구를 브러쉬로 되돌리지 않는다. 다만 고른 브러쉬가 채우기를 지원하지
+    // 않으면 그대로 두어 봐야 아무것도 칠할 수 없으므로 브러쉬 도구로 바꾼다.
+    // 지우개는 활성 브러쉬와 무관하게 동작하므로 브러쉬를 고르면 곧바로 칠하려는
+    // 의도로 보고 브러쉬 도구로 바꾼다.
+    if (tool !== 'fill' || !brush.fillable) setTool('brush');
   };
 
   const runTransfer = async (action: () => Promise<string | null>) => {
