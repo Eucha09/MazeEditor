@@ -673,6 +673,28 @@
       "previewModel": "default"
     },
     {
+      "id": 55,
+      "name": "튜토리얼 몬스터1",
+      "group": "엔티티",
+      "layer": "entity",
+      "terrainType": 0,
+      "entityType": "monster",
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 101,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": null,
+      "previewModel": "plant"
+    },
+    {
       "id": 39,
       "name": "늑대1",
       "group": "엔티티",
