@@ -450,7 +450,7 @@ describe('브러쉬 설정', () => {
   it('newBrushId는 기존 브러쉬들과 겹치지 않는 다음 정수를 돌려준다', () => {
     expect(newBrushId([])).toBe(1);
     expect(newBrushId([makeBrush({ id: 3 }), makeBrush({ id: 7 })])).toBe(8);
-    expect(newBrushId(defaultBrushes())).toBe(7);
+    expect(newBrushId(defaultBrushes())).toBe(8);
   });
 
   it('entity 레이어는 크기가 1로 고정되고 지형 타입을 쓰지 않는다', () => {
@@ -534,7 +534,8 @@ describe('브러쉬 설정', () => {
   it('기본 세트의 바닥 브러쉬는 채우기가 가능하다', () => {
     const floor = defaultBrushes().find((b) => b.name === '바닥')!;
     expect(floor.fillable).toBe(true);
-    expect(floor.terrainType).toBe(TERRAIN_EMPTY);
+    // None으로 두어 미로 생성기가 채울 자리로 남긴다.
+    expect(floor.terrainType).toBe(TERRAIN_NONE);
   });
 });
 
@@ -1011,6 +1012,16 @@ describe('generateMazePreview (미로 생성 미리보기)', () => {
     placeEntityBrush(doc, monster, 5, 5);
 
     expect(generateMazePreview(doc, [monster]).seedCount).toBe(0);
+  });
+
+  it('기본 브러쉬 세트의 Seed만으로 미로를 생성할 수 있다', () => {
+    const brushes = defaultBrushes();
+    const seed = brushes.find((b) => b.entityType === 'seed')!;
+    expect(seed.allowedCellKinds).toEqual(['floor']);
+
+    const doc = createDoc(11, 11);
+    placeEntityBrush(doc, seed, 5, 5);
+    expect(generateMazePreview(doc, brushes).seedCount).toBe(1);
   });
 
   it('시드 칸은 원래 지형과 무관하게 항상 Empty가 된다', () => {

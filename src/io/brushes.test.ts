@@ -119,7 +119,7 @@ describe('브러쉬 내보내기/가져오기', () => {
     const original = defaultBrushes();
     // '벽'(id 2)을 '엔티티' 그룹 맨 끝으로 옮긴다.
     const reordered = reorderBrushes(original, 2, '엔티티', null);
-    expect(reordered.map((b) => b.name)).toEqual(['바닥', '시작', '목표', '아이템', '적 스폰', '벽']);
+    expect(reordered.map((b) => b.name)).toEqual(['바닥', '시작', '목표', '아이템', '적 스폰', 'Seed', '벽']);
 
     const restored = parseBrushesJson(brushesToJson(reordered));
     expect(restored.map((b) => b.name)).toEqual(reordered.map((b) => b.name));

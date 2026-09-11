@@ -284,7 +284,9 @@ export function defaultBrushes(): Brush[] {
       name: '바닥',
       group: GROUP_FOREST,
       layer: 'terrain',
-      terrainType: TERRAIN_EMPTY,
+      // None으로 두면 미로 생성기가 채울 자리로 남는다. 예시 브러쉬 파일의
+      // 바닥과도 같은 값이다.
+      terrainType: TERRAIN_NONE,
       entityType: null,
       allowedCellKinds: [...CELL_KINDS],
       objectIds: zeroObjectIds(),
@@ -374,6 +376,25 @@ export function defaultBrushes(): Brush[] {
       blob: false,
       fillable: false,
       color: '#f87171',
+      previewModel: 'default',
+    },
+    {
+      id: 7,
+      name: 'Seed',
+      group: GROUP_ENTITY,
+      layer: 'entity',
+      terrainType: TERRAIN_NONE,
+      entityType: 'seed',
+      // 미로 생성기는 시드에서 두 칸씩 길을 뚫어 나가므로 floor 칸에만 놓는다.
+      allowedCellKinds: ['floor'],
+      // 예시 브러쉬 파일(brushes/brushes.json)의 Seed와 id·오브젝트 ID를 맞춰,
+      // 어느 세트로 칠해도 맵에 같은 값이 남게 한다.
+      objectIds: { floor: -1, wall: 0, pillar: 0 },
+      unique: false,
+      size: 1,
+      blob: false,
+      fillable: false,
+      color: '#a78bfa',
       previewModel: 'default',
     },
   ];
