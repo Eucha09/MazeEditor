@@ -49,7 +49,7 @@ const PREVIEW_MODEL_HINT: Record<PreviewModel, string> = {
   default: '지형 타입이 Wall이면 기본 높이의 벽으로 세웁니다.',
   'special-wall': '일반 벽보다 조금 높은 벽(높이 11.1)으로 세웁니다.',
   'special-door':
-    '특수지역 벽과 같은 높이·색으로, 가운데서 좌우로 갈라져 양옆 벽 속으로 밀려 들어가는 포켓 도어를 조금 열린 채로 세웁니다.',
+    '특수지역 벽과 같은 높이·색으로, 가운데서 좌우로 갈라져 양옆 벽 속으로 밀려 들어가는 포켓 도어를 세웁니다. 지형 타입이 Wall이면 닫힌 모습, 미로 생성기가 뚫은 칸이면 열린 모습입니다.',
   'outer-wall': '일반 벽보다 많이 높은 벽(높이 22.5)으로 세웁니다.',
   'start-area': '플레이어 시작 지점 표시로 검을 든 흰 단발머리 여성 용사를 칸 가운데에 세웁니다.',
   'safe-area': '쉬어 갈 수 있는 곳 표시로 세계수처럼 거대한 나무를 칸 가운데에 세웁니다.',
@@ -57,6 +57,7 @@ const PREVIEW_MODEL_HINT: Record<PreviewModel, string> = {
   monster: '검은 늑대 한 마리를 칸 가운데에 세웁니다.',
   golem: '돌 골렘 한 마리를 칸 가운데에 세웁니다.',
   plant: '식충식물 한 마리를 칸 가운데에 세웁니다.',
+  statue: '뿔과 날개가 달린 악마 석상을 받침대째 칸 가운데에 세웁니다.',
 };
 
 export function BrushDialog({ open, brush, onClose }: BrushDialogProps) {

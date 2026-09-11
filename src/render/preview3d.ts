@@ -318,12 +318,14 @@ export function createPreview3D(canvas: HTMLCanvasElement): Preview3DScene {
     forEachPreviewCell(doc, terrainType, layout, modelOfBrush, {
       wall: (model, height) => {
         tallest = Math.max(tallest, height);
-        // 문은 상자가 아니라 부품 묶음이라 인스턴싱 대상이 아니다.
-        if (model === 'special-door') return;
         wallCounts.set(model, (wallCounts.get(model) ?? 0) + 1);
       },
       prop: (model) => {
         tallest = Math.max(tallest, propHeightOf(model));
+      },
+      // 문은 상자가 아니라 부품 묶음이라 인스턴싱하지 않는다. 높이만 센다.
+      door: (_open, height) => {
+        tallest = Math.max(tallest, height);
       },
     });
 
@@ -341,20 +343,19 @@ export function createPreview3D(canvas: HTMLCanvasElement): Preview3DScene {
     let propLights = 0;
     forEachPreviewCell(doc, terrainType, layout, modelOfBrush, {
       wall: (model, height, cx, cz, sx, sz) => {
-        if (model === 'special-door') {
-          // 문은 특수지역 벽과 같은 재질을 그대로 쓴다 — 색이 똑같이 맞는다.
-          const door = buildDoor(wallMaterials.special, { cx, cz, sx, sz }, height);
-          prepareShadows(door);
-          scene.add(door);
-          mapObjects.push(door);
-          return;
-        }
         const slot = wallMeshes.get(model);
         if (!slot) return;
         position.set(cx, height / 2, cz);
         scaleVec.set(sx, height, sz);
         matrix.compose(position, quaternion, scaleVec);
         slot.mesh.setMatrixAt(slot.next++, matrix);
+      },
+      // 문은 특수지역 벽과 같은 재질을 그대로 쓴다 — 색이 똑같이 맞는다.
+      door: (open, height, cx, cz, sx, sz) => {
+        const door = buildDoor(wallMaterials.special, { cx, cz, sx, sz }, height, open);
+        prepareShadows(door);
+        scene.add(door);
+        mapObjects.push(door);
       },
       prop: (model, cx, cz) => {
         const prop = buildProp(model, modelMaterials);

@@ -61,7 +61,8 @@ export function isPropModel(model: PreviewModel): boolean {
     model === 'boss-area' ||
     model === 'monster' ||
     model === 'golem' ||
-    model === 'plant'
+    model === 'plant' ||
+    model === 'statue'
   );
 }
 
@@ -139,6 +140,11 @@ export interface PreviewVisitors {
   wall(model: PreviewModel, height: number, cx: number, cz: number, sx: number, sz: number): void;
   /** 지나갈 수 있는 칸에 놓인 지역 장식물. 칸 가운데(cx, cz)에 하나 세운다. */
   prop(model: PreviewModel, cx: number, cz: number, sx: number, sz: number): void;
+  /**
+   * 특수지역 문 칸. open이면 문짝이 양옆 주머니로 물러난 열린 모습으로 세운다.
+   * 문은 상자 하나가 아니라 부품 묶음이라 wall과 따로 받는다.
+   */
+  door(open: boolean, height: number, cx: number, cz: number, sx: number, sz: number): void;
 }
 
 /**
@@ -155,6 +161,8 @@ export interface PreviewVisitors {
  *
  * 벽 계열 모델은 지형 타입이 Wall인 칸에서만 세운다. 미로 생성기가 그 칸을
  * 뚫어 버렸다면 브러쉬 설정과 무관하게 통로이므로 아무것도 세우지 않는다.
+ * 문만 예외다 — 뚫린 칸에서는 사라지는 대신 열린 모습으로 선다. 문은 벽이
+ * 아니라 벽에 난 통로라서, 뚫렸다는 것이 곧 '열렸다'는 뜻이기 때문이다.
  * 반대로 지역 장식물은 지나갈 수 있는 칸에만 세운다 — 벽 속에 갇힌 용사나
  * 나무는 미리보기에서 오히려 헷갈린다.
  */
@@ -190,7 +198,14 @@ export function forEachPreviewCell(
 
       if (terrainType[i] === TERRAIN_WALL) {
         const model = pickWallModel(fromTerrain, fromEntity);
-        visit.wall(model, wallHeightOf(model) ?? WALL_HEIGHT, cx, cz, sx, sz);
+        if (model === 'special-door') visit.door(false, SPECIAL_WALL_HEIGHT, cx, cz, sx, sz);
+        else visit.wall(model, wallHeightOf(model) ?? WALL_HEIGHT, cx, cz, sx, sz);
+        continue;
+      }
+
+      // 뚫린 칸에 남는 벽 계열 모델은 문뿐이다. 문짝이 물러난 열린 모습으로 세운다.
+      if (fromTerrain === 'special-door' || fromEntity === 'special-door') {
+        visit.door(true, SPECIAL_WALL_HEIGHT, cx, cz, sx, sz);
         continue;
       }
 

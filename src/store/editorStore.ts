@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { CellPos, GridId, MapDoc, ToolId } from '@/core/types';
+import type { BrushId, CellPos, GridId, MapDoc, ToolId } from '@/core/types';
 import { TERRAIN_NONE } from '@/core/types';
 import type { Anchor } from '@/core/tilemap';
 import {
@@ -31,6 +31,19 @@ import { loadAutosave, scheduleAutosave } from '@/io/autosave';
 import { openTextFile, saveTextAs, writeHandle, type FileHandleLike } from '@/io/fileDialog';
 import { useBrushStore } from './brushStore';
 
+/**
+ * 상태창에서 브러쉬를 클릭했을 때 그 브러쉬가 칠해진 칸이 번쩍이는 시간.
+ * 몇 번 깜빡일지와 진하기는 렌더러(brushFlashAlpha)가 정한다.
+ */
+export const BRUSH_FLASH_MS = 1400;
+
+/** 번쩍이는 중인 브러쉬. 진행도는 렌더 루프가 startedAt에서 프레임마다 직접 계산한다. */
+export interface BrushFlash {
+  brushId: BrushId;
+  /** performance.now() 기준 시작 시각. */
+  startedAt: number;
+}
+
 // 4n+3 규칙을 만족하는 값이어야 한다.
 export const DEFAULT_MAP_WIDTH = 35;
 export const DEFAULT_MAP_HEIGHT = 27;
@@ -49,6 +62,8 @@ let activeStroke: Stroke | null = null;
 let strokeTool: ToolId | null = null;
 /** 이번 스트로크에서 규칙 때문에 건너뛴 이유. 아무것도 안 그려졌을 때 알리는 데 쓴다. */
 let strokeBlockReason: string | null = null;
+/** 번쩍임을 끝낼 타이머. 연달아 클릭하면 이전 것을 취소하고 처음부터 다시 시작한다. */
+let flashTimer = 0;
 
 interface EditorState {
   doc: MapDoc;
@@ -57,6 +72,13 @@ interface EditorState {
    * 렌더러는 이 카운터로 다시 그릴 시점을 판단한다.
    */
   rev: number;
+
+  /**
+   * rev와 달리 맵 내용이 바뀐 횟수만 센다. rev는 호버·카메라 이동으로도 올라가서
+   * 다시 그릴 시점을 알리는 데는 맞지만, 맵을 통째로 훑는 계산(상태창의 칸 수
+   * 집계 같은 것)을 다시 할 시점으로 쓰면 마우스를 움직일 때마다 다시 세게 된다.
+   */
+  docRev: number;
 
   camera: Camera;
   /** 뷰포트 크기를 아는 쪽(CanvasView)에서 화면 맞춤을 수행하도록 요청하는 신호 */
@@ -85,11 +107,16 @@ interface EditorState {
   fileName: string | null;
   notice: string | null;
 
+  /** 상태창에서 고른 브러쉬가 칠해진 칸을 잠깐 번쩍이게 하는 표시. */
+  flash: BrushFlash | null;
+
   setTool: (tool: ToolId) => void;
   toggleGrid: () => void;
   setHover: (cell: CellPos | null) => void;
   setNotice: (text: string | null) => void;
   setDocName: (name: string) => void;
+  /** 이 브러쉬가 칠해진 칸을 잠깐 번쩍이게 한다. BRUSH_FLASH_MS 뒤 저절로 꺼진다. */
+  flashBrush: (brushId: BrushId) => void;
 
   setCamera: (camera: Camera) => void;
   panBy: (dx: number, dy: number) => void;
@@ -269,6 +296,7 @@ export const useEditorStore = create<EditorState>()((set, get) => {
     const doc = nextDoc ?? get().doc;
     const patch: Partial<EditorState> = {
       rev: get().rev + 1,
+      docRev: get().docRev + 1,
       dirty: true,
       canUndo: history.canUndo,
       canRedo: history.canRedo,
@@ -292,6 +320,8 @@ export const useEditorStore = create<EditorState>()((set, get) => {
     set({
       doc,
       rev: get().rev + 1,
+      docRev: get().docRev + 1,
+      flash: null,
       canUndo: false,
       canRedo: false,
       hover: null,
@@ -305,6 +335,7 @@ export const useEditorStore = create<EditorState>()((set, get) => {
   return {
     doc: boot.doc,
     rev: 0,
+    docRev: 0,
     camera: { ox: 0, oy: 0, scale: 24 },
     fitRequest: 1,
 
@@ -320,6 +351,7 @@ export const useEditorStore = create<EditorState>()((set, get) => {
     dirty: false,
     fileName: null,
     notice: boot.restored ? bootNotice(boot.doc) : null,
+    flash: null,
 
     setTool: (tool) => set({ tool }),
     toggleGrid: () => set({ showGrid: !get().showGrid }),
@@ -329,6 +361,11 @@ export const useEditorStore = create<EditorState>()((set, get) => {
       set({ hover, rev: get().rev + 1 });
     },
     setNotice: (notice) => set({ notice }),
+    flashBrush: (brushId) => {
+      window.clearTimeout(flashTimer);
+      set({ flash: { brushId, startedAt: performance.now() } });
+      flashTimer = window.setTimeout(() => set({ flash: null }), BRUSH_FLASH_MS);
+    },
     setDocName: (name) => {
       const doc = { ...get().doc, name };
       set({ doc, rev: get().rev + 1, dirty: true });

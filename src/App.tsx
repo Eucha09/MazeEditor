@@ -12,6 +12,7 @@ import { ResizeHandle } from '@/ui/ResizeHandle';
 import { StatusBar } from '@/ui/StatusBar';
 import { Toolbar } from '@/ui/Toolbar';
 import { TopBar } from '@/ui/TopBar';
+import { UsagePanel } from '@/ui/UsagePanel';
 
 /**
  * 3D 미리보기는 three.js를 통째로 끌고 오므로 열 때 따로 받는다.
@@ -65,8 +66,9 @@ export default function App() {
 
       <div className="flex min-h-0 flex-1">
         <Toolbar />
-        <main className="min-w-0 flex-1">
+        <main className="relative min-w-0 flex-1">
           <CanvasView />
+          <UsagePanel />
         </main>
         <ResizeHandle label="브러쉬 패널 너비 조절" onDrag={resizePalette} />
         <Palette

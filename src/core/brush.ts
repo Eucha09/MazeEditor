@@ -33,8 +33,8 @@ export const ENTITY_TYPE_NAME: Record<EntityType, string> = {
  *
  * 이 브러쉬가 칠한 칸을 3D 미리보기에서 어떻게 세울지 정한다. 벽 계열
  * (default·special-wall·special-door·outer-wall)은 지형 타입이 Wall인 칸에서만
- * 의미가 있고 높이·모양만 달라진다. 장식물 계열(start/safe/boss-area, monster,
- * golem, plant)은 반대로 지나갈 수 있는 칸 위에 장식물을 하나 세운다. 어느 쪽인지는
+ * 의미가 있고 높이·모양만 달라진다. 문만 예외로 뚫린 칸에서도 열린 모습으로 선다. 장식물 계열(start/safe/boss-area, monster,
+ * golem, plant, statue)은 반대로 지나갈 수 있는 칸 위에 장식물을 하나 세운다. 어느 쪽인지는
  * layout3d.ts의 wallHeightOf / isPropModel이 판정한다.
  *
  * 값을 늘릴 때는 브러쉬 파일 버전을 올리지 않는다(io/brushes.ts의 스키마 주석 참고).
@@ -56,6 +56,7 @@ export const PREVIEW_MODELS = [
   'monster',
   'golem',
   'plant',
+  'statue',
 ] as const;
 export type PreviewModel = (typeof PREVIEW_MODELS)[number];
 
@@ -70,6 +71,7 @@ export const PREVIEW_MODEL_NAME: Record<PreviewModel, string> = {
   monster: '늑대',
   golem: '골렘',
   plant: '식충',
+  statue: '석상',
 };
 
 /** 팔레트 뱃지처럼 좁은 자리에 쓸 짧은 이름. 기본값은 표시하지 않는다. */
@@ -84,6 +86,7 @@ export const PREVIEW_MODEL_SHORT: Record<PreviewModel, string> = {
   monster: '늑대',
   golem: '골렘',
   plant: '식충',
+  statue: '석상',
 };
 
 /**

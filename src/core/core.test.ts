@@ -35,6 +35,7 @@ import { checkBlobPlacement } from './tools/place';
 import { floodFillRegion } from './tools/fill';
 import { generateMazePreview } from './tools/generateMaze';
 import { computeBrushResync } from './tools/resyncBrush';
+import { countBrushUsage } from './tools/usage';
 import type { MapLayout3D } from './layout3d';
 import {
   FLOOR_SPAN,
@@ -93,12 +94,14 @@ function collectPreview(
 ) {
   const walls: Array<{ model: string; height: number; cx: number; cz: number; sx: number; sz: number }> = [];
   const props: Array<{ model: string; cx: number; cz: number }> = [];
+  const doors: Array<{ open: boolean; height: number; cx: number; cz: number }> = [];
   const modelOf = (id: number) => brushes.find((b) => b.id === id)?.previewModel ?? 'default';
   forEachPreviewCell(doc, terrainType, layout, modelOf, {
     wall: (model, height, cx, cz, sx, sz) => walls.push({ model, height, cx, cz, sx, sz }),
     prop: (model, cx, cz) => props.push({ model, cx, cz }),
+    door: (open, height, cx, cz) => doors.push({ open, height, cx, cz }),
   });
-  return { walls, props };
+  return { walls, props, doors };
 }
 
 describe('createDoc', () => {
@@ -1166,6 +1169,38 @@ describe('layout3d (칸 종류별 3D 크기)', () => {
   });
 });
 
+describe('countBrushUsage (브러쉬별 칠해진 칸 수)', () => {
+  it('두 레이어를 합쳐 세고 많이 쓰인 순으로 돌려준다', () => {
+    const doc = createDoc(11, 11);
+    const terrain = getLayer(doc, 'terrain').brush;
+    const entity = getLayer(doc, 'entity').brush;
+
+    terrain[0] = 7;
+    terrain[1] = 7;
+    terrain[2] = 7;
+    terrain[3] = 9;
+    // 같은 브러쉬 id가 두 레이어에 걸쳐 있어도 하나로 합쳐 센다.
+    entity[4] = 9;
+    entity[5] = 9;
+    entity[6] = 9;
+    entity[7] = 9;
+
+    expect(countBrushUsage(doc)).toEqual([
+      { brushId: 9, count: 5 },
+      { brushId: 7, count: 3 },
+    ]);
+  });
+
+  it('빈 칸(0)은 세지 않고, 팔레트에서 지운 브러쉬의 자국도 그대로 센다', () => {
+    const doc = createDoc(7, 7);
+    expect(countBrushUsage(doc)).toEqual([]);
+
+    // 정의가 남아 있는지와 무관하게 맵에 남은 id를 그대로 돌려준다 — 이름은 부르는 쪽 몫이다.
+    getLayer(doc, 'terrain').brush[10] = 1234;
+    expect(countBrushUsage(doc)).toEqual([{ brushId: 1234, count: 1 }]);
+  });
+});
+
 describe('3D 미리보기 모델 타입', () => {
   it('모델마다 정해진 벽 높이를 돌려준다', () => {
     expect(wallHeightOf('default')).toBe(WALL_HEIGHT);
@@ -1182,6 +1217,7 @@ describe('3D 미리보기 모델 타입', () => {
     expect(wallHeightOf('monster')).toBeNull();
     expect(wallHeightOf('golem')).toBeNull();
     expect(wallHeightOf('plant')).toBeNull();
+    expect(wallHeightOf('statue')).toBeNull();
   });
 
   it('지역 계열과 몬스터들만 장식물로 분류한다', () => {
@@ -1191,6 +1227,7 @@ describe('3D 미리보기 모델 타입', () => {
     expect(isPropModel('monster')).toBe(true);
     expect(isPropModel('golem')).toBe(true);
     expect(isPropModel('plant')).toBe(true);
+    expect(isPropModel('statue')).toBe(true);
     expect(isPropModel('default')).toBe(false);
     expect(isPropModel('special-wall')).toBe(false);
     expect(isPropModel('special-door')).toBe(false);
@@ -1248,6 +1285,28 @@ describe('3D 미리보기 모델 타입', () => {
     const { walls, props } = collectPreview(doc, terrainType, layout, [special]);
     expect(walls).toHaveLength(0);
     expect(props).toHaveLength(0);
+  });
+
+  it('문은 벽 칸이면 닫힌 모습으로, 뚫린 칸이면 열린 모습으로 선다', () => {
+    const doc = createDoc(11, 11);
+    const layout = mapLayout3D(doc);
+    const door = makeBrush({ id: 6, previewModel: 'special-door' });
+    const terrainType = new Uint8Array(doc.width * doc.height);
+
+    const shut = cellIndex(6, 5, doc.width);
+    const carved = cellIndex(4, 5, doc.width);
+    for (const i of [shut, carved]) getLayer(doc, 'terrain').brush[i] = door.id;
+    terrainType[shut] = TERRAIN_WALL;
+    terrainType[carved] = TERRAIN_EMPTY;
+
+    const { doors, walls, props } = collectPreview(doc, terrainType, layout, [door]);
+    // 문은 상자 하나가 아니라 부품 묶음이라 wall이 아니라 door로 온다.
+    expect(walls).toHaveLength(0);
+    expect(props).toHaveLength(0);
+    expect(doors).toHaveLength(2);
+    expect(doors.every((d) => d.height === SPECIAL_WALL_HEIGHT)).toBe(true);
+    expect(doors.find((d) => d.cx > 0)?.open).toBe(false);
+    expect(doors.find((d) => d.cx < 0)?.open).toBe(true);
   });
 
   it('벽 칸에 놓인 지역 장식물은 무시된다', () => {

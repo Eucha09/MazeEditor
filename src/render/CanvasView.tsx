@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { CellPos } from '@/core/types';
-import { computeFit, useEditorStore } from '@/store/editorStore';
+import { BRUSH_FLASH_MS, computeFit, useEditorStore } from '@/store/editorStore';
 import { useBrushStore } from '@/store/brushStore';
 import { screenToCell } from './camera';
-import { renderMap } from './renderer';
+import { brushFlashAlpha, renderMap } from './renderer';
 
 type DragMode = 'idle' | 'paint' | 'pan';
+
+/** 번쩍임이 시작된 뒤 얼마나 지났는지를 0~1로. */
+function flashProgress(startedAt: number): number {
+  return (performance.now() - startedAt) / BRUSH_FLASH_MS;
+}
 
 /**
  * 격자 캔버스.
@@ -66,6 +71,7 @@ export function CanvasView() {
             ? []
             : null,
       mazePreview: s.mazePreview,
+      flash: s.flash && { brushId: s.flash.brushId, alpha: brushFlashAlpha(flashProgress(s.flash.startedAt)) },
     });
   }, []);
 
@@ -117,6 +123,9 @@ export function CanvasView() {
   useEffect(() => {
     let raf = 0;
     const loop = () => {
+      // 번쩍이는 동안은 스토어가 바뀌지 않아도 매 프레임 다시 그려야 한다 —
+      // 진하기가 시간에 따라 변하는 유일한 표시다.
+      if (useEditorStore.getState().flash) needsDraw.current = true;
       if (needsDraw.current) {
         needsDraw.current = false;
         draw();
