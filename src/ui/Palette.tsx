@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { ChevronDown, ChevronRight, Download, Pencil, Plus, Upload } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { ChevronDown, ChevronRight, Download, GripVertical, Pencil, Plus, Upload } from 'lucide-react';
 import type { Brush } from '@/core/brush';
-import { brushColor } from '@/core/brush';
+import { PREVIEW_MODEL_NAME, PREVIEW_MODEL_SHORT, brushColor } from '@/core/brush';
+import type { BrushId } from '@/core/types';
 import { useBrushStore } from '@/store/brushStore';
 import { useEditorStore } from '@/store/editorStore';
 
@@ -11,10 +12,17 @@ interface PaletteProps {
   onEditBrush: (brush: Brush) => void;
 }
 
+/** 끌어다 놓는 위치: targetGroup 안의 beforeId 브러쉬 앞. beforeId가 null이면 그룹 끝. */
+interface DropAt {
+  group: string;
+  beforeId: BrushId | null;
+}
+
 export function Palette({ width, onAddBrush, onEditBrush }: PaletteProps) {
   const brushes = useBrushStore((s) => s.brushes);
   const activeBrushId = useBrushStore((s) => s.activeBrushId);
   const setActiveBrush = useBrushStore((s) => s.setActiveBrush);
+  const moveBrush = useBrushStore((s) => s.moveBrush);
   const exportBrushes = useBrushStore((s) => s.exportBrushes);
   const importBrushes = useBrushStore((s) => s.importBrushes);
   const tool = useEditorStore((s) => s.tool);
@@ -30,6 +38,62 @@ export function Palette({ width, onAddBrush, onEditBrush }: PaletteProps) {
       else next.add(group);
       return next;
     });
+
+  // 드래그 중인 브러쉬 id. drop 핸들러가 dragover의 setState를 기다리지 않고
+  // 곧바로 읽을 수 있도록 ref에 둔다(빠른 드래그·합성 이벤트에서도 안전).
+  const dragIdRef = useRef<BrushId | null>(null);
+  // 화면 표시용: 드래그 중인 행 흐리게, 놓을 자리에 삽입선.
+  const [dragId, setDragId] = useState<BrushId | null>(null);
+  const [dropAt, setDropAt] = useState<DropAt | null>(null);
+
+  const beginDrag = (brushId: BrushId, e: React.DragEvent<HTMLElement>) => {
+    dragIdRef.current = brushId;
+    setDragId(brushId);
+    setDropAt(null);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(brushId));
+    const row = e.currentTarget.closest('li');
+    if (row) e.dataTransfer.setDragImage(row, 12, 12);
+  };
+
+  const endDrag = () => {
+    dragIdRef.current = null;
+    setDragId(null);
+    setDropAt(null);
+  };
+
+  // 한 행 위에서 커서가 위쪽 절반이면 그 행 앞, 아래쪽 절반이면 그 다음(= 그룹 안 다음 행 앞).
+  const rowDropAt = (
+    e: React.DragEvent<HTMLElement>,
+    group: string,
+    groupBrushes: Brush[],
+    brush: Brush,
+  ): DropAt => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const below = e.clientY - rect.top > rect.height / 2;
+    const idx = groupBrushes.findIndex((b) => b.id === brush.id);
+    return { group, beforeId: below ? (groupBrushes[idx + 1]?.id ?? null) : brush.id };
+  };
+
+  const onRowDragOver = (
+    e: React.DragEvent<HTMLLIElement>,
+    group: string,
+    groupBrushes: Brush[],
+    brush: Brush,
+  ) => {
+    if (dragIdRef.current === null) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    const next = rowDropAt(e, group, groupBrushes, brush);
+    setDropAt((prev) => (prev && prev.group === next.group && prev.beforeId === next.beforeId ? prev : next));
+  };
+
+  const drop = (target: DropAt) => {
+    const dragged = dragIdRef.current;
+    if (dragged !== null) moveBrush(dragged, target.group, target.beforeId);
+    endDrag();
+  };
 
   // 팔레트에 보이는 순서가 곧 숫자 단축키 순서다.
   const hotkeyOf = (brush: Brush) => {
@@ -54,6 +118,12 @@ export function Palette({ width, onAddBrush, onEditBrush }: PaletteProps) {
   const groups: string[] = [];
   for (const b of brushes) if (!groups.includes(b.group)) groups.push(b.group);
 
+  const showDropLine = (group: string, beforeId: BrushId | null) =>
+    dragId !== null &&
+    dropAt?.group === group &&
+    dropAt.beforeId === beforeId &&
+    dropAt.beforeId !== dragId;
+
   return (
     <aside
       style={{ width }}
@@ -62,25 +132,59 @@ export function Palette({ width, onAddBrush, onEditBrush }: PaletteProps) {
     >
       {groups.map((group) => {
         const open = !collapsed.has(group);
+        const groupBrushes = brushes.filter((b) => b.group === group);
+        const headerIsTarget =
+          dragId !== null && dropAt?.group === group && dropAt.beforeId === null && !open;
         return (
           <section key={group}>
             <button
               type="button"
               onClick={() => toggleGroup(group)}
               aria-expanded={open}
-              className="mb-1.5 flex w-full items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-ink-dim hover:text-ink"
+              onDragOver={(e) => {
+                if (dragIdRef.current === null) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                setDropAt({ group, beforeId: null });
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                drop({ group, beforeId: null });
+              }}
+              className={`mb-1.5 flex w-full items-center gap-1 rounded text-[11px] font-semibold uppercase tracking-wider transition-colors ${
+                headerIsTarget ? 'bg-accent/15 text-accent' : 'text-ink-dim hover:text-ink'
+              }`}
             >
               {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
               {group}
             </button>
             {open && (
               <ul className="flex flex-col gap-0.5">
-                {brushes
-                  .filter((b) => b.group === group)
-                  .map((brush) => {
-                    const selected = tool !== 'eraser' && brush.id === activeBrushId;
-                    return (
-                      <li key={brush.id} className="group/row flex items-center">
+                {groupBrushes.map((brush) => {
+                  const selected = tool !== 'eraser' && brush.id === activeBrushId;
+                  return (
+                    <li
+                      key={brush.id}
+                      onDragOver={(e) => onRowDragOver(e, group, groupBrushes, brush)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        drop(rowDropAt(e, group, groupBrushes, brush));
+                      }}
+                      className={`group/row flex flex-col ${dragId === brush.id ? 'opacity-40' : ''}`}
+                    >
+                      {showDropLine(group, brush.id) && <DropLine />}
+                      <div className="flex items-center">
+                        <span
+                          draggable
+                          onDragStart={(e) => beginDrag(brush.id, e)}
+                          onDragEnd={endDrag}
+                          title="드래그해서 순서 변경"
+                          aria-label={`${brush.name} 순서 변경`}
+                          className="grid h-7 w-4 shrink-0 cursor-grab place-items-center text-ink-dim/0 transition-colors group-hover/row:text-ink-dim/70 hover:!text-ink active:cursor-grabbing"
+                        >
+                          <GripVertical size={12} />
+                        </span>
                         <button
                           type="button"
                           onClick={() => select(brush)}
@@ -106,9 +210,11 @@ export function Palette({ width, onAddBrush, onEditBrush }: PaletteProps) {
                         >
                           <Pencil size={13} />
                         </button>
-                      </li>
-                    );
-                  })}
+                      </div>
+                    </li>
+                  );
+                })}
+                {showDropLine(group, null) && <DropLine />}
               </ul>
             )}
           </section>
@@ -128,7 +234,8 @@ export function Palette({ width, onAddBrush, onEditBrush }: PaletteProps) {
           <SmallButton icon={Upload} label="가져오기" onClick={() => void runTransfer(importBrushes)} />
         </div>
         <p className="mt-1.5 text-[11px] leading-relaxed text-ink-dim/70">
-          브러쉬는 맵 파일과 따로 보관됩니다. 맵에는 지형 타입과 오브젝트 ID만 저장됩니다.
+          브러쉬는 맵 파일과 따로 보관됩니다. 맵에는 지형 타입과 오브젝트 ID만 저장됩니다. 행 왼쪽의
+          손잡이를 끌어 순서를 바꿀 수 있고, 순서는 브러쉬 파일에 함께 저장됩니다.
         </p>
       </section>
 
@@ -149,6 +256,11 @@ export function Palette({ width, onAddBrush, onEditBrush }: PaletteProps) {
   );
 }
 
+/** 브러쉬를 놓을 자리를 나타내는 가는 선. */
+function DropLine() {
+  return <div aria-hidden className="mx-2 my-px h-0.5 rounded-full bg-accent" />;
+}
+
 function Badges({ brush }: { brush: Brush }) {
   return (
     <span className="flex shrink-0 items-center gap-1">
@@ -156,6 +268,12 @@ function Badges({ brush }: { brush: Brush }) {
       {brush.blob && <Badge text="덩어리" title="하나의 덩어리로 인식합니다" />}
       {brush.unique && <Badge text="1개" title="맵에 하나만 놓을 수 있습니다" />}
       {brush.fillable && <Badge text="채우기" title="채우기 도구를 쓸 수 있습니다" />}
+      {brush.previewModel !== 'default' && (
+        <Badge
+          text={PREVIEW_MODEL_SHORT[brush.previewModel]}
+          title={`3D 미리보기 모델: ${PREVIEW_MODEL_NAME[brush.previewModel]}`}
+        />
+      )}
       {brush.entityType && (
         <Badge
           text={brush.entityType === 'seed' ? 'Seed' : 'Monster'}

@@ -1,18 +1,22 @@
 import { useEffect, useId, useState } from 'react';
-import type { Brush, BrushDraft, BrushSize, EntityType } from '@/core/brush';
+import type { Brush, BrushDraft, BrushSize, EntityType, PreviewModel } from '@/core/brush';
 import {
   BRUSH_SIZES,
   CELL_KINDS,
   CELL_KIND_NAME,
   ENTITY_TYPES,
   ENTITY_TYPE_NAME,
+  PREVIEW_MODELS,
+  PREVIEW_MODEL_NAME,
   autoColor,
   canBeFillable,
+  sanitizeObjectId,
   zeroObjectIds,
 } from '@/core/brush';
 import type { CellKind, LayerKey, TerrainType } from '@/core/types';
 import { TERRAIN_NONE, TERRAIN_TYPES, TERRAIN_TYPE_NAME } from '@/core/types';
 import { useBrushStore } from '@/store/brushStore';
+import { useEditorStore } from '@/store/editorStore';
 import { Modal } from './Modal';
 
 interface BrushDialogProps {
@@ -36,8 +40,24 @@ function emptyDraft(group: string): BrushDraft {
     blob: false,
     fillable: false,
     color: null,
+    previewModel: 'default',
   };
 }
+
+/** 3D 미리보기 모델별 한 줄 설명. 무엇이 달라지는지 고르기 전에 알 수 있게 한다. */
+const PREVIEW_MODEL_HINT: Record<PreviewModel, string> = {
+  default: '지형 타입이 Wall이면 기본 높이의 벽으로 세웁니다.',
+  'special-wall': '일반 벽보다 조금 높은 벽(높이 11.1)으로 세웁니다.',
+  'special-door':
+    '특수지역 벽과 같은 높이·색으로, 가운데서 좌우로 갈라져 양옆 벽 속으로 밀려 들어가는 포켓 도어를 조금 열린 채로 세웁니다.',
+  'outer-wall': '일반 벽보다 많이 높은 벽(높이 22.5)으로 세웁니다.',
+  'start-area': '플레이어 시작 지점 표시로 검을 든 흰 단발머리 여성 용사를 칸 가운데에 세웁니다.',
+  'safe-area': '쉬어 갈 수 있는 곳 표시로 세계수처럼 거대한 나무를 칸 가운데에 세웁니다.',
+  'boss-area': '보스가 있는 곳 표시로 거대한 나무 정령을 칸 가운데에 세웁니다.',
+  monster: '검은 늑대 한 마리를 칸 가운데에 세웁니다.',
+  golem: '돌 골렘 한 마리를 칸 가운데에 세웁니다.',
+  plant: '식충식물 한 마리를 칸 가운데에 세웁니다.',
+};
 
 export function BrushDialog({ open, brush, onClose }: BrushDialogProps) {
   const brushes = useBrushStore((s) => s.brushes);
@@ -87,8 +107,15 @@ export function BrushDialog({ open, brush, onClose }: BrushDialogProps) {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (brush) updateBrush(brush.id, draft);
-    else addBrush(draft);
+    if (brush) {
+      updateBrush(brush.id, draft);
+      // updateBrush는 draft를 normalizeDraft로 한 번 더 정리하므로, 실제로
+      // 저장된 값(브러쉬 저장소에서 다시 읽은 것)을 맵에 반영해야 어긋나지 않는다.
+      const saved = useBrushStore.getState().brushes.find((b) => b.id === brush.id);
+      if (saved) useEditorStore.getState().resyncBrush(saved);
+    } else {
+      addBrush(draft);
+    }
     onClose();
   };
 
@@ -177,17 +204,10 @@ export function BrushDialog({ open, brush, onClose }: BrushDialogProps) {
                     <input type="checkbox" checked={on} onChange={() => toggleKind(kind)} />
                     <span className={on ? '' : 'text-ink-dim/60'}>{CELL_KIND_NAME[kind]}</span>
                   </label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={1}
-                    disabled={!on}
+                  <ObjectIdInput
                     value={draft.objectIds[kind]}
-                    onChange={(e) =>
-                      patch({ objectIds: { ...draft.objectIds, [kind]: Number(e.target.value) } })
-                    }
-                    title="이 칸에 기록할 오브젝트 ID"
-                    className={`${INPUT} w-24 disabled:opacity-40`}
+                    disabled={!on}
+                    onChange={(id) => patch({ objectIds: { ...draft.objectIds, [kind]: id } })}
                   />
                 </div>
               );
@@ -262,6 +282,20 @@ export function BrushDialog({ open, brush, onClose }: BrushDialogProps) {
           </div>
         </Field>
 
+        <Field label="3D 미리보기 모델" hint={PREVIEW_MODEL_HINT[draft.previewModel]}>
+          <select
+            value={draft.previewModel}
+            onChange={(e) => patch({ previewModel: e.target.value as PreviewModel })}
+            className={INPUT}
+          >
+            {PREVIEW_MODELS.map((model) => (
+              <option key={model} value={model}>
+                {PREVIEW_MODEL_NAME[model]}
+              </option>
+            ))}
+          </select>
+        </Field>
+
         <div className="mt-4 flex items-center gap-2">
           {brush && (
             <button
@@ -289,6 +323,50 @@ export function BrushDialog({ open, brush, onClose }: BrushDialogProps) {
         </div>
       </form>
     </Modal>
+  );
+}
+
+/**
+ * 오브젝트 ID 입력칸. 음수도 받는다.
+ *
+ * type="number" 입력칸을 제어 컴포넌트로 쓰면 음수를 처음부터 칠 수 없다. "-"만 친
+ * 순간 브라우저가 값을 빈 문자열로 넘기고, 그게 0이 되어 칸이 곧바로 "0"으로
+ * 되돌아가기 때문이다. 그래서 친 글자를 그대로 따로 들고 있다가, 온전한 정수가
+ * 됐을 때만 바깥 값에 반영한다. 미완성 입력("-", 빈칸)은 칸을 벗어나면 마지막으로
+ * 반영된 값으로 되돌린다.
+ */
+function ObjectIdInput({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: number;
+  disabled: boolean;
+  onChange: (value: number) => void;
+}) {
+  const [text, setText] = useState(String(value));
+
+  // 다른 브러쉬를 여는 등 바깥 값이 바뀌면 따라간다. 지금 글자가 이미 같은 수를
+  // 뜻하면 그대로 둬서, 치는 중인 모양을 흐트러뜨리지 않는다.
+  useEffect(() => {
+    setText((current) => (current !== '' && current !== '-' && Number(current) === value ? current : String(value)));
+  }, [value]);
+
+  return (
+    <input
+      type="text"
+      value={text}
+      disabled={disabled}
+      onChange={(e) => {
+        const next = e.target.value.trim();
+        if (!/^-?\d*$/.test(next)) return;
+        setText(next);
+        if (/^-?\d+$/.test(next)) onChange(sanitizeObjectId(Number(next)));
+      }}
+      onBlur={() => setText(String(value))}
+      title="이 칸에 기록할 오브젝트 ID. 음수도 쓸 수 있습니다."
+      className={`${INPUT} w-24 disabled:opacity-40`}
+    />
   );
 }
 

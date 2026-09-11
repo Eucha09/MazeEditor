@@ -1,4 +1,4 @@
-import { Brush, Eraser, Grid3x3, Maximize2, PaintBucket, Redo2, Undo2, Wand2, X } from 'lucide-react';
+import { Box, Brush, Eraser, Grid3x3, Maximize2, PaintBucket, Redo2, Undo2, Wand2, X } from 'lucide-react';
 import { useEditorStore } from '@/store/editorStore';
 import { IconButton } from './IconButton';
 
@@ -8,6 +8,7 @@ export function Toolbar() {
   const canUndo = useEditorStore((s) => s.canUndo);
   const canRedo = useEditorStore((s) => s.canRedo);
   const mazePreview = useEditorStore((s) => s.mazePreview);
+  const preview3d = useEditorStore((s) => s.preview3d);
   const setTool = useEditorStore((s) => s.setTool);
   const toggleGrid = useEditorStore((s) => s.toggleGrid);
   const undo = useEditorStore((s) => s.undo);
@@ -15,6 +16,7 @@ export function Toolbar() {
   const requestFit = useEditorStore((s) => s.requestFit);
   const generateMaze = useEditorStore((s) => s.generateMaze);
   const exitMazePreview = useEditorStore((s) => s.exitMazePreview);
+  const openPreview3d = useEditorStore((s) => s.openPreview3d);
 
   return (
     <nav className="flex w-12 shrink-0 flex-col items-center gap-1 border-r border-edge bg-panel-2 py-2" aria-label="도구">
@@ -40,6 +42,13 @@ export function Toolbar() {
         hotkey="M"
         active={mazePreview !== null}
         onClick={generateMaze}
+      />
+      <IconButton
+        icon={Box}
+        label="3D 미리보기"
+        active={preview3d}
+        disabled={!mazePreview}
+        onClick={openPreview3d}
       />
       <IconButton icon={X} label="미리보기 종료" hotkey="Esc" disabled={!mazePreview} onClick={exitMazePreview} />
     </nav>

@@ -33,17 +33,30 @@ export type LayerKey = 'terrain' | 'entity';
  */
 export type CellKind = 'floor' | 'wall' | 'pillar';
 
-/** 게임에서 참조할 오브젝트 ID. 0은 "오브젝트 없음". */
+/**
+ * 게임에서 참조할 오브젝트 ID. 0은 "오브젝트 없음".
+ * 음수도 쓸 수 있다. 그래서 맵 격자는 부호 있는 32비트 정수(Int32Array)로 저장하고,
+ * 값은 아래 범위 안이어야 한다.
+ */
 export type ObjectId = number;
+export const OBJECT_ID_MIN = -2147483648;
+export const OBJECT_ID_MAX = 2147483647;
 
 /** 브러쉬 정의의 정수 식별자. 0은 "브러쉬로 칠해진 적 없음". (core/brush.ts 참고) */
 export type BrushId = number;
 
+/** 문서 안의 격자 배열. 지형 타입은 Uint8, 오브젝트 ID는 Int32, 브러쉬 id는 Uint32다. */
+export type GridArray = Uint8Array | Int32Array | Uint32Array;
+
 export interface Layer {
   key: LayerKey;
   visible: boolean;
-  /** 길이 width * height. index = y * width + x. 0이면 오브젝트 없음. */
-  object: Uint32Array;
+  /**
+   * 길이 width * height. index = y * width + x. 0이면 오브젝트 없음.
+   * 음수 ID를 담아야 하므로 부호 있는 Int32Array다 — 부호 없는 배열에 음수를 넣으면
+   * 큰 양수로 바뀌어 버린다.
+   */
+  object: Int32Array;
   /**
    * 이 칸을 찍은 브러쉬의 id. 게임은 쓰지 않는 에디터 전용 메타데이터로,
    * 같은 오브젝트 ID를 여러 브러쉬가 공유해도 어떤 브러쉬였는지 정확히 추적하고

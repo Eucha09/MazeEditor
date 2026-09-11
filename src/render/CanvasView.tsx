@@ -22,6 +22,7 @@ export function CanvasView() {
   const previewing = useEditorStore((s) => s.mazePreview !== null);
   const generateMaze = useEditorStore((s) => s.generateMaze);
   const exitMazePreview = useEditorStore((s) => s.exitMazePreview);
+  const openPreview3d = useEditorStore((s) => s.openPreview3d);
 
   const needsDraw = useRef(true);
   const size = useRef({ w: 0, h: 0 });
@@ -252,6 +253,13 @@ export function CanvasView() {
               className="rounded-full bg-white/10 px-2 py-0.5 text-ink-dim transition-colors hover:bg-white/20 hover:text-ink"
             >
               다시 생성
+            </button>
+            <button
+              type="button"
+              onClick={openPreview3d}
+              className="rounded-full bg-teal-400/20 px-2 py-0.5 text-teal-200 transition-colors hover:bg-teal-400/30 hover:text-white"
+            >
+              3D 미리보기
             </button>
             <button
               type="button"

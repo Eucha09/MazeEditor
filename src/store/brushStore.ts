@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Brush, BrushDraft } from '@/core/brush';
-import { defaultBrushes, newBrushId, normalizeDraft } from '@/core/brush';
+import { defaultBrushes, newBrushId, normalizeDraft, reorderBrushes } from '@/core/brush';
 import type { BrushId } from '@/core/types';
 import { brushesToJson, loadBrushes, parseBrushesJson, saveBrushes } from '@/io/brushes';
 import { openTextFile, saveTextAs } from '@/io/fileDialog';
@@ -13,6 +13,12 @@ interface BrushState {
   addBrush: (draft: BrushDraft) => Brush;
   updateBrush: (id: BrushId, draft: BrushDraft) => void;
   deleteBrush: (id: BrushId) => void;
+  /**
+   * 팔레트에서 브러쉬를 끌어다 놓아 순서를 바꾼다. beforeId 브러쉬 바로 앞에
+   * 놓이며, null이면 targetGroup의 끝에 붙는다. 다른 그룹으로 옮기면 group도
+   * 바뀐다. 바뀐 순서는 브러쉬 파일에 그대로 저장된다(배열 순서 = 정렬 값).
+   */
+  moveBrush: (draggedId: BrushId, targetGroup: string, beforeId: BrushId | null) => void;
   /** 성공/실패를 알릴 문구를 돌려준다. 알림 표시는 부르는 쪽(UI)이 한다. */
   exportBrushes: () => Promise<string | null>;
   importBrushes: () => Promise<string | null>;
@@ -56,6 +62,12 @@ export const useBrushStore = create<BrushState>()((set, get) => {
       // 지운 것이 활성 브러쉬였다면 남아 있는 첫 브러쉬로 옮긴다.
       const active = get().activeBrushId === id ? (brushes[0]?.id ?? null) : get().activeBrushId;
       set({ brushes, activeBrushId: active });
+    },
+
+    moveBrush: (draggedId, targetGroup, beforeId) => {
+      const next = reorderBrushes(get().brushes, draggedId, targetGroup, beforeId);
+      // 참조가 그대로면 옮길 필요가 없었던 것이므로 저장도 건너뛴다.
+      if (next !== get().brushes) commit(next);
     },
 
     exportBrushes: async () => {

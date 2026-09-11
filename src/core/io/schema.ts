@@ -1,10 +1,22 @@
 import { z } from 'zod';
+import { OBJECT_ID_MAX, OBJECT_ID_MIN } from '../types';
 
 export const FORMAT = 'maze-editor';
 export const FORMAT_VERSION = 3;
 
 /** 행 우선 2차원 배열. 사람이 읽기 쉽고 게임 쪽 로더도 그대로 쓸 수 있다. */
 const rowsSchema = z.array(z.array(z.number().int().min(0)));
+
+/**
+ * 오브젝트 ID 격자. 음수도 받되, 맵 격자(Int32Array)에 담기는 범위를 넘으면
+ * 거부한다 — 여기서 몰래 잘라 내면 게임 데이터가 조용히 바뀐다.
+ *
+ * 음수를 받게 되면서 FORMAT_VERSION은 올리지 않았다. 예전 파일은 전부 그대로
+ * 통과하는 확장이고, 음수가 든 새 파일을 예전 에디터가 열면 그쪽 스키마에 걸려
+ * 이유와 함께 거부되므로 조용히 깨지는 일도 없다. 버전을 올리면 음수가 하나도
+ * 없는 파일까지 예전 에디터가 못 열게 될 뿐이다.
+ */
+const objectRowsSchema = z.array(z.array(z.number().int().min(OBJECT_ID_MIN).max(OBJECT_ID_MAX)));
 
 /**
  * 맵 파일에는 지형 타입·오브젝트 ID·브러쉬 id가 들어간다.
@@ -22,11 +34,11 @@ export const mapFileSchema = z
     terrain: z.object({
       /** 0 = None, 1 = Empty, 2 = Wall */
       type: rowsSchema,
-      object: rowsSchema,
+      object: objectRowsSchema,
       brush: rowsSchema,
     }),
     entity: z.object({
-      object: rowsSchema,
+      object: objectRowsSchema,
       brush: rowsSchema,
     }),
   })

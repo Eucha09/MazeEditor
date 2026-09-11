@@ -1,5 +1,5 @@
 import type { BrushId, CellKind, LayerKey, ObjectId, TerrainType } from './types';
-import { TERRAIN_EMPTY, TERRAIN_NONE, TERRAIN_WALL } from './types';
+import { OBJECT_ID_MAX, OBJECT_ID_MIN, TERRAIN_EMPTY, TERRAIN_NONE, TERRAIN_WALL } from './types';
 
 /** 브러쉬가 가질 수 있는 크기. 브러쉬마다 고정이며 사용 중에 바뀌지 않는다. */
 export const BRUSH_SIZES = [1, 3, 5] as const;
@@ -26,6 +26,64 @@ export type EntityType = (typeof ENTITY_TYPES)[number];
 export const ENTITY_TYPE_NAME: Record<EntityType, string> = {
   seed: 'Seed (미로 생성 시드 위치)',
   monster: 'Monster (몬스터 스폰)',
+};
+
+/**
+ * 3D 미리보기 모델 타입.
+ *
+ * 이 브러쉬가 칠한 칸을 3D 미리보기에서 어떻게 세울지 정한다. 벽 계열
+ * (default·special-wall·special-door·outer-wall)은 지형 타입이 Wall인 칸에서만
+ * 의미가 있고 높이·모양만 달라진다. 장식물 계열(start/safe/boss-area, monster,
+ * golem, plant)은 반대로 지나갈 수 있는 칸 위에 장식물을 하나 세운다. 어느 쪽인지는
+ * layout3d.ts의 wallHeightOf / isPropModel이 판정한다.
+ *
+ * 값을 늘릴 때는 브러쉬 파일 버전을 올리지 않는다(io/brushes.ts의 스키마 주석 참고).
+ *
+ * 아래 키 문자열은 브러쉬 파일에 그대로 저장되므로 바꾸지 않는다. 보이는 이름만
+ * 바꿀 때는 PREVIEW_MODEL_NAME·PREVIEW_MODEL_SHORT만 고친다 — 키를 바꾸면
+ * 스키마의 .catch가 옛 파일의 그 값을 모두 기본 모델로 되돌려 버린다. 그래서
+ * start-area가 '용사', safe-area가 '세계수', boss-area가 '나무 정령',
+ * monster가 '늑대'로 보이는 식으로 키와 이름이 어긋나 있다.
+ */
+export const PREVIEW_MODELS = [
+  'default',
+  'special-wall',
+  'special-door',
+  'outer-wall',
+  'start-area',
+  'safe-area',
+  'boss-area',
+  'monster',
+  'golem',
+  'plant',
+] as const;
+export type PreviewModel = (typeof PREVIEW_MODELS)[number];
+
+export const PREVIEW_MODEL_NAME: Record<PreviewModel, string> = {
+  default: '기본',
+  'special-wall': '특수지역 벽',
+  'special-door': '특수지역 문',
+  'outer-wall': '외곽 벽',
+  'start-area': '용사',
+  'safe-area': '세계수',
+  'boss-area': '나무 정령',
+  monster: '늑대',
+  golem: '골렘',
+  plant: '식충',
+};
+
+/** 팔레트 뱃지처럼 좁은 자리에 쓸 짧은 이름. 기본값은 표시하지 않는다. */
+export const PREVIEW_MODEL_SHORT: Record<PreviewModel, string> = {
+  default: '',
+  'special-wall': '특수벽',
+  'special-door': '문',
+  'outer-wall': '외곽벽',
+  'start-area': '용사',
+  'safe-area': '세계수',
+  'boss-area': '정령',
+  monster: '늑대',
+  golem: '골렘',
+  plant: '식충',
 };
 
 /**
@@ -62,6 +120,8 @@ export interface Brush {
   fillable: boolean;
   /** null이면 이름과 종류에서 색을 자동으로 만든다. */
   color: string | null;
+  /** 3D 미리보기에서 이 브러쉬가 칠한 칸을 어떻게 세울지. */
+  previewModel: PreviewModel;
 }
 
 /** 브러쉬 편집 화면이 다루는 값. id는 저장 시점에 정해진다. */
@@ -111,17 +171,27 @@ export function normalizeDraft(draft: BrushDraft): BrushDraft {
     entityType: entity ? draft.entityType : null,
     size: entity ? 1 : draft.size,
     fillable: canBeFillable(allowedCellKinds, draft.blob, draft.unique) && draft.fillable,
+    // 파일에서 온 값이 목록에 없는 문자열일 수 있다. 모르는 모델은 기본으로 되돌린다.
+    previewModel: PREVIEW_MODELS.includes(draft.previewModel) ? draft.previewModel : 'default',
     objectIds: {
-      floor: sanitizeId(draft.objectIds.floor),
-      wall: sanitizeId(draft.objectIds.wall),
-      pillar: sanitizeId(draft.objectIds.pillar),
+      floor: sanitizeObjectId(draft.objectIds.floor),
+      wall: sanitizeObjectId(draft.objectIds.wall),
+      pillar: sanitizeObjectId(draft.objectIds.pillar),
     },
   };
 }
 
-function sanitizeId(value: number): ObjectId {
+/**
+ * 오브젝트 ID를 저장할 수 있는 정수로 맞춘다.
+ * 음수는 그대로 두고, 소수점은 0 쪽으로 버리며(-2.7 → -2), 맵 격자(Int32Array)에
+ * 들어가는 범위로 자른다. 파일 가져오기(normalizeDraft)와 편집 창 입력이 같은
+ * 규칙을 쓰도록 여기 하나만 둔다.
+ */
+export function sanitizeObjectId(value: number): ObjectId {
   if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.floor(value));
+  // `|| 0`은 -0을 0으로 바꾼다.
+  const id = Math.trunc(value) || 0;
+  return Math.min(OBJECT_ID_MAX, Math.max(OBJECT_ID_MIN, id));
 }
 
 /** 이름이 같으면 항상 같은 색이 나온다. 브러쉬를 여러 개 만들어도 서로 구분된다. */
@@ -153,6 +223,53 @@ export function newBrushId(existing: Brush[]): BrushId {
   return existing.reduce((max, b) => Math.max(max, b.id), 0) + 1;
 }
 
+/**
+ * 팔레트에서 브러쉬 하나를 다른 자리로 옮긴 새 배열을 돌려준다.
+ *
+ * 팔레트의 표시 순서·숫자 단축키(1~9)·그룹 묶음이 모두 이 배열 순서 하나로
+ * 정해지고, io/brushes.ts가 배열을 그 순서 그대로 저장하고 불러온다. 그래서
+ * "정렬 값"을 브러쉬마다 따로 두지 않고 배열 순서 자체가 정렬 값이다.
+ *
+ * beforeId가 가리키는 브러쉬 바로 앞에 끼워 넣는다. beforeId가 null이거나
+ * 목록에 없으면 targetGroup의 마지막 브러쉬 뒤에 붙인다(그 그룹이 아직
+ * 비어 있으면 배열 맨 끝). 옮긴 자리의 그룹이 원래 그룹과 다르면 브러쉬의
+ * group도 그 그룹으로 바꾼다 — 팔레트가 group별로 나눠 보여 주므로, 안 바꾸면
+ * 옮긴 자리에 머무르지 못하고 원래 그룹으로 튕겨 나온다.
+ *
+ * 옮길 필요가 없으면(브러쉬를 못 찾거나 자기 앞에 놓는 경우) 원본 배열을
+ * 그대로 돌려준다 — 부르는 쪽에서 참조 비교로 "바뀐 게 없음"을 알 수 있다.
+ */
+export function reorderBrushes(
+  brushes: Brush[],
+  draggedId: BrushId,
+  targetGroup: string,
+  beforeId: BrushId | null,
+): Brush[] {
+  if (draggedId === beforeId) return brushes;
+  const dragged = brushes.find((b) => b.id === draggedId);
+  if (!dragged) return brushes;
+
+  const moved = dragged.group === targetGroup ? dragged : { ...dragged, group: targetGroup };
+  const rest = brushes.filter((b) => b.id !== draggedId);
+
+  let insertAt = rest.findIndex((b) => b.id === beforeId);
+  if (insertAt === -1) {
+    insertAt = rest.length;
+    for (let i = rest.length - 1; i >= 0; i--) {
+      if (rest[i].group === targetGroup) {
+        insertAt = i + 1;
+        break;
+      }
+    }
+  }
+
+  // rest에서 insertAt 자리는 원래 배열에서 dragged가 있던 자리와 같은 지점이다
+  // (제거하면서 뒤쪽이 한 칸씩 당겨졌으므로). 그룹도 그대로면 바뀐 게 없다.
+  if (moved === dragged && insertAt === brushes.indexOf(dragged)) return brushes;
+
+  return [...rest.slice(0, insertAt), moved, ...rest.slice(insertAt)];
+}
+
 const GROUP_FOREST = '숲 지형';
 const GROUP_ENTITY = '엔티티';
 
@@ -173,6 +290,7 @@ export function defaultBrushes(): Brush[] {
       blob: false,
       fillable: true,
       color: '#232834',
+      previewModel: 'default',
     },
     {
       id: 2,
@@ -189,6 +307,7 @@ export function defaultBrushes(): Brush[] {
       blob: false,
       fillable: false,
       color: '#6b7689',
+      previewModel: 'default',
     },
     {
       id: 3,
@@ -204,6 +323,7 @@ export function defaultBrushes(): Brush[] {
       blob: false,
       fillable: false,
       color: '#4ade80',
+      previewModel: 'default',
     },
     {
       id: 4,
@@ -219,6 +339,7 @@ export function defaultBrushes(): Brush[] {
       blob: false,
       fillable: false,
       color: '#f472b6',
+      previewModel: 'default',
     },
     {
       id: 5,
@@ -234,6 +355,7 @@ export function defaultBrushes(): Brush[] {
       blob: false,
       fillable: false,
       color: '#fbbf24',
+      previewModel: 'default',
     },
     {
       id: 6,
@@ -249,6 +371,7 @@ export function defaultBrushes(): Brush[] {
       blob: false,
       fillable: false,
       color: '#f87171',
+      previewModel: 'default',
     },
   ];
 }

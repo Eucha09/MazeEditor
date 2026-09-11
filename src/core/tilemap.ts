@@ -1,4 +1,4 @@
-import type { BrushId, GridId, Layer, LayerKey, MapDoc, ObjectId, TerrainType } from './types';
+import type { BrushId, GridArray, GridId, Layer, LayerKey, MapDoc, ObjectId, TerrainType } from './types';
 import { TERRAIN_NONE } from './types';
 
 export const MIN_MAP_SIZE = 3;
@@ -44,7 +44,7 @@ export function getLayer(doc: MapDoc, key: LayerKey): Layer {
 }
 
 /** 격자 이름으로 실제 배열을 얻는다. 히스토리와 편집이 공통으로 쓴다. */
-export function getGrid(doc: MapDoc, grid: GridId): Uint8Array | Uint32Array {
+export function getGrid(doc: MapDoc, grid: GridId): GridArray {
   switch (grid) {
     case 'terrainType':
       return doc.terrainType;
@@ -86,7 +86,7 @@ export function getBrushId(doc: MapDoc, layer: LayerKey, x: number, y: number): 
 }
 
 export function createLayer(key: LayerKey, cells: number): Layer {
-  return { key, visible: true, object: new Uint32Array(cells), brush: new Uint32Array(cells) };
+  return { key, visible: true, object: new Int32Array(cells), brush: new Uint32Array(cells) };
 }
 
 export interface CreateDocOptions {
@@ -131,7 +131,7 @@ export function sameGrid(a: MapDoc, b: MapDoc): boolean {
   return true;
 }
 
-function sameArray(left: Uint8Array | Uint32Array, right: Uint8Array | Uint32Array): boolean {
+function sameArray(left: GridArray, right: GridArray): boolean {
   if (left.length !== right.length) return false;
   for (let i = 0; i < left.length; i++) {
     if (left[i] !== right[i]) return false;
@@ -182,7 +182,7 @@ export function resizeDoc(doc: MapDoc, width: number, height: number, options: R
   const y0 = Math.max(0, offY);
   const y1 = Math.min(h, offY + doc.height);
 
-  const copy = <T extends Uint8Array | Uint32Array>(src: T, dst: T): T => {
+  const copy = <T extends GridArray>(src: T, dst: T): T => {
     for (let y = y0; y < y1; y++) {
       const srcBase = (y - offY) * doc.width - offX;
       const dstBase = y * w;

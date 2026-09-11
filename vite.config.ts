@@ -15,7 +15,16 @@ export default defineConfig({
   optimizeDeps: {
     // 모든 의존성을 첫 패스에서 함께 최적화한다.
     // 나눠서 최적화되면 나중 패스의 청크가 React 사본을 따로 품는 경우가 있다.
-    include: ['react', 'react-dom', 'react-dom/client', 'zustand', 'zod', 'lucide-react'],
+    include: [
+      'react',
+      'react-dom',
+      'react-dom/client',
+      'zustand',
+      'zod',
+      'lucide-react',
+      'three',
+      'three/examples/jsm/controls/OrbitControls.js',
+    ],
   },
   server: {
     port: 5180,

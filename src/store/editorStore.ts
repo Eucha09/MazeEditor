@@ -23,6 +23,7 @@ import { forEachBrushCell, forEachLineCell } from '@/core/tools/brush';
 import { checkBlobPlacement, isCellAllowed, REJECTION_MESSAGE } from '@/core/tools/place';
 import { floodFillRegion } from '@/core/tools/fill';
 import { generateMazePreview } from '@/core/tools/generateMaze';
+import { computeBrushResync } from '@/core/tools/resyncBrush';
 import { parseJson, toJson } from '@/core/io/serialize';
 import type { Camera } from '@/render/camera';
 import { fitToView, pan as panCamera, zoomAt } from '@/render/camera';
@@ -71,6 +72,11 @@ interface EditorState {
    * 대신 이 값을 잠깐 보여줄 뿐이다.
    */
   mazePreview: Uint8Array | null;
+  /**
+   * 3D 미리보기 오버레이가 열려 있는지.
+   * 보여 주는 내용이 mazePreview이므로 미리보기가 꺼지면 함께 닫힌다.
+   */
+  preview3d: boolean;
 
   canUndo: boolean;
   canRedo: boolean;
@@ -99,9 +105,18 @@ interface EditorState {
   undo: () => void;
   redo: () => void;
 
+  /**
+   * 브러쉬 설정을 고친 뒤, 이 브러쉬로 이미 칠해진 칸들을 새 설정에 맞게
+   * 다시 계산해 맵에 반영한다. 일반 편집과 마찬가지로 되돌릴 수 있다.
+   */
+  resyncBrush: (brush: Brush) => void;
+
   /** 현재 맵의 Seed 엔티티들로 미로를 생성해 미리보기를 켠다. 문서는 바뀌지 않는다. */
   generateMaze: () => void;
   exitMazePreview: () => void;
+  /** 미리보기를 3D로 보는 오버레이를 연다. 미리보기가 꺼져 있으면 열지 않는다. */
+  openPreview3d: () => void;
+  closePreview3d: () => void;
 
   newDoc: (width: number, height: number, name: string) => void;
   /** 내용을 유지한 채 맵 크기를 바꾼다. 크기는 4n+3으로 보정된다. */
@@ -259,6 +274,7 @@ export const useEditorStore = create<EditorState>()((set, get) => {
       canRedo: history.canRedo,
       // 문서가 바뀌면 미리보기는 더 이상 지금 상태를 반영하지 않으므로 꺼 둔다.
       mazePreview: null,
+      preview3d: false,
     };
     if (doc !== get().doc) {
       patch.doc = doc;
@@ -281,6 +297,7 @@ export const useEditorStore = create<EditorState>()((set, get) => {
       hover: null,
       fitRequest: get().fitRequest + 1,
       mazePreview: null,
+      preview3d: false,
       ...patch,
     });
   }
@@ -295,6 +312,7 @@ export const useEditorStore = create<EditorState>()((set, get) => {
     showGrid: true,
     hover: null,
     mazePreview: null,
+    preview3d: false,
 
     canUndo: false,
     canRedo: false,
@@ -393,6 +411,20 @@ export const useEditorStore = create<EditorState>()((set, get) => {
       afterMutation(next);
     },
 
+    resyncBrush: (brush) => {
+      const { doc } = get();
+      const changes = computeBrushResync(doc, brush);
+      if (changes.length === 0) return;
+
+      const stroke: Stroke = { label: 'brush-resync', changes: [] };
+      for (const change of changes) {
+        getGrid(doc, change.grid)[change.index] = change.after;
+        stroke.changes.push(change);
+      }
+      if (!history.commit(stroke)) return;
+      afterMutation();
+    },
+
     generateMaze: () => {
       const { doc } = get();
       const { brushes } = useBrushStore.getState();
@@ -404,7 +436,17 @@ export const useEditorStore = create<EditorState>()((set, get) => {
       set({ mazePreview: result.terrainType, notice: `미로 생성 미리보기 · Seed ${result.seedCount}개` });
     },
 
-    exitMazePreview: () => set({ mazePreview: null }),
+    exitMazePreview: () => set({ mazePreview: null, preview3d: false }),
+
+    openPreview3d: () => {
+      if (get().mazePreview === null) {
+        set({ notice: '미로 생성 미리보기를 켠 뒤에 3D로 볼 수 있습니다.' });
+        return;
+      }
+      set({ preview3d: true });
+    },
+
+    closePreview3d: () => set({ preview3d: false }),
 
     newDoc: (width, height, name) => {
       const doc = createDoc(width, height, { name: name || '새 맵' });

@@ -1,8 +1,8 @@
-import type { MapDoc } from '../types';
+import type { GridArray, MapDoc } from '../types';
 import { createLayer, getLayer } from '../tilemap';
 import { FORMAT, FORMAT_VERSION, mapFileSchema, type MapFile } from './schema';
 
-function gridToRows(grid: Uint8Array | Uint32Array, width: number, height: number): number[][] {
+function gridToRows(grid: GridArray, width: number, height: number): number[][] {
   const rows: number[][] = new Array(height);
   for (let y = 0; y < height; y++) {
     const row: number[] = new Array(width);
@@ -13,7 +13,7 @@ function gridToRows(grid: Uint8Array | Uint32Array, width: number, height: numbe
   return rows;
 }
 
-function rowsToGrid<T extends Uint8Array | Uint32Array>(rows: number[][], grid: T, width: number): T {
+function rowsToGrid<T extends GridArray>(rows: number[][], grid: T, width: number): T {
   for (let y = 0; y < rows.length; y++) {
     const row = rows[y];
     const base = y * width;
@@ -47,7 +47,9 @@ export function toJson(doc: MapDoc): string {
   const file = serializeDoc(doc);
   const text = JSON.stringify(file, null, 2);
   // 셀 배열은 2단 들여쓰기로 펼쳐지면 너무 길어지므로 한 행을 한 줄로 접는다.
-  return text.replace(/\[\s+((?:\d+,\s+)*\d+)\s+\]/g, (_m, body: string) => `[${body.replace(/\s+/g, ' ')}]`);
+  // 오브젝트 ID는 음수일 수 있으므로 앞의 '-'까지 숫자로 본다. 빠뜨리면 음수가 든
+  // 행만 여러 줄로 풀려 나온다.
+  return text.replace(/\[\s+((?:-?\d+,\s+)*-?\d+)\s+\]/g, (_m, body: string) => `[${body.replace(/\s+/g, ' ')}]`);
 }
 
 export function deserializeDoc(raw: unknown): MapDoc {

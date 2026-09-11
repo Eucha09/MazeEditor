@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import type { Brush } from '@/core/brush';
 import { CanvasView } from '@/render/CanvasView';
 import { useEditorStore } from '@/store/editorStore';
@@ -13,6 +13,14 @@ import { StatusBar } from '@/ui/StatusBar';
 import { Toolbar } from '@/ui/Toolbar';
 import { TopBar } from '@/ui/TopBar';
 
+/**
+ * 3D 미리보기는 three.js를 통째로 끌고 오므로 열 때 따로 받는다.
+ * 3D를 한 번도 열지 않는 대부분의 편집 작업에서 첫 로딩이 무거워지지 않는다.
+ */
+const Preview3DView = lazy(() =>
+  import('@/render/Preview3DView').then((m) => ({ default: m.Preview3DView })),
+);
+
 const PALETTE_DEFAULT_WIDTH = 224;
 const PALETTE_MIN_WIDTH = 200;
 const PALETTE_MAX_WIDTH = 480;
@@ -26,6 +34,7 @@ export default function App() {
   });
   const [paletteWidth, setPaletteWidth] = useState(() => loadPaletteWidth(PALETTE_DEFAULT_WIDTH));
   const dirty = useEditorStore((s) => s.dirty);
+  const preview3d = useEditorStore((s) => s.preview3d);
 
   // 핸들은 왼쪽에 있으므로 오른쪽(팔레트 쪽)으로 끌면 폭이 줄고, 왼쪽(캔버스 쪽)으로
   // 끌면 늘어난다 — 그래서 델타를 뺀다.
@@ -37,8 +46,9 @@ export default function App() {
     });
   };
 
-  // 대화상자가 떠 있는 동안에는 전역 단축키를 꺼 둔다.
-  useHotkeys(!newMapOpen && !resizeOpen && !brushDialog.open);
+  // 대화상자나 3D 미리보기가 떠 있는 동안에는 전역 단축키를 꺼 둔다.
+  // (3D 미리보기는 자기 화면 안에서 Esc를 직접 처리한다)
+  useHotkeys(!newMapOpen && !resizeOpen && !brushDialog.open && !preview3d);
 
   // 저장하지 않은 편집이 있으면 탭을 닫기 전에 확인한다.
   // (자동 저장이 있긴 하지만 브라우저를 바꾸면 복구되지 않는다)
@@ -74,6 +84,17 @@ export default function App() {
         brush={brushDialog.brush}
         onClose={() => setBrushDialog({ open: false, brush: null })}
       />
+      {preview3d && (
+        <Suspense
+          fallback={
+            <div className="fixed inset-0 z-50 grid place-items-center bg-panel text-sm text-ink-dim">
+              3D 미리보기를 불러오는 중…
+            </div>
+          }
+        >
+          <Preview3DView />
+        </Suspense>
+      )}
     </div>
   );
 }

@@ -25,6 +25,7 @@ import {
   newBrushId,
   normalizeDraft,
   objectIdFor,
+  reorderBrushes,
   sameObjectIdForAll,
   zeroObjectIds,
 } from './brush';
@@ -33,10 +34,25 @@ import { forEachBrushCell, forEachLineCell } from './tools/brush';
 import { checkBlobPlacement } from './tools/place';
 import { floodFillRegion } from './tools/fill';
 import { generateMazePreview } from './tools/generateMaze';
+import { computeBrushResync } from './tools/resyncBrush';
+import type { MapLayout3D } from './layout3d';
+import {
+  FLOOR_SPAN,
+  OUTER_WALL_HEIGHT,
+  SPECIAL_WALL_HEIGHT,
+  WALL_HEIGHT,
+  WALL_SPAN,
+  cellBox3D,
+  cellSpan,
+  forEachPreviewCell,
+  isPropModel,
+  mapLayout3D,
+  wallHeightOf,
+} from './layout3d';
 import { parseJson, toJson } from './io/serialize';
 import { mapFileSchema } from './io/schema';
 import type { GridId, MapDoc } from './types';
-import { TERRAIN_EMPTY, TERRAIN_NONE, TERRAIN_WALL } from './types';
+import { OBJECT_ID_MAX, OBJECT_ID_MIN, TERRAIN_EMPTY, TERRAIN_NONE, TERRAIN_WALL } from './types';
 
 /** 스토어가 하는 일과 동일하게, 변경을 기록하면서 격자 한 칸에 값을 쓴다. */
 function write(doc: MapDoc, stroke: Stroke, grid: GridId, x: number, y: number, value: number): void {
@@ -63,8 +79,26 @@ function makeBrush(over: Partial<Brush> = {}): Brush {
     blob: false,
     fillable: false,
     color: null,
+    previewModel: 'default',
     ...over,
   };
+}
+
+/** 테스트에서 쓰기 편하도록 forEachPreviewCell 결과를 배열로 모은다. */
+function collectPreview(
+  doc: MapDoc,
+  terrainType: Uint8Array,
+  layout: MapLayout3D,
+  brushes: Brush[] = [],
+) {
+  const walls: Array<{ model: string; height: number; cx: number; cz: number; sx: number; sz: number }> = [];
+  const props: Array<{ model: string; cx: number; cz: number }> = [];
+  const modelOf = (id: number) => brushes.find((b) => b.id === id)?.previewModel ?? 'default';
+  forEachPreviewCell(doc, terrainType, layout, modelOf, {
+    wall: (model, height, cx, cz, sx, sz) => walls.push({ model, height, cx, cz, sx, sz }),
+    prop: (model, cx, cz) => props.push({ model, cx, cz }),
+  });
+  return { walls, props };
 }
 
 describe('createDoc', () => {
@@ -245,6 +279,42 @@ describe('직렬화', () => {
     expect(() => parseJson('{"format":"maze-editor","version":1}')).toThrow(/버전 1/);
     expect(() => parseJson('{"format":"maze-editor","version":2}')).toThrow(/버전 2/);
   });
+
+  it('음수 오브젝트 ID도 격자와 파일 왕복에서 그대로 유지된다', () => {
+    const doc = createDoc(7, 7);
+    const stroke: Stroke = { label: 'brush', changes: [] };
+    write(doc, stroke, 'terrainObject', 1, 1, -5);
+    write(doc, stroke, 'entityObject', 3, 3, OBJECT_ID_MIN);
+    write(doc, stroke, 'entityObject', 5, 5, OBJECT_ID_MAX);
+
+    // 격자 자체가 음수를 담아야 한다. 부호 없는 배열이면 큰 양수로 바뀐다.
+    expect(getLayer(doc, 'terrain').object[cellIndex(1, 1, 7)]).toBe(-5);
+
+    const text = toJson(doc);
+    const restored = parseJson(text);
+    expect(getLayer(restored, 'terrain').object[cellIndex(1, 1, 7)]).toBe(-5);
+    expect(getLayer(restored, 'entity').object[cellIndex(3, 3, 7)]).toBe(OBJECT_ID_MIN);
+    expect(getLayer(restored, 'entity').object[cellIndex(5, 5, 7)]).toBe(OBJECT_ID_MAX);
+    // 음수가 든 행도 한 줄로 접힌다.
+    expect(text).toContain('[0, -5, 0, 0, 0, 0, 0]');
+  });
+
+  it('오브젝트 ID가 저장 범위를 넘거나 브러쉬 id가 음수면 거부한다', () => {
+    const tooBig = JSON.parse(toJson(createDoc(7, 7)));
+    tooBig.entity.object[1][1] = OBJECT_ID_MAX + 1;
+    expect(mapFileSchema.safeParse(tooBig).success).toBe(false);
+
+    const negativeBrush = JSON.parse(toJson(createDoc(7, 7)));
+    negativeBrush.terrain.brush[1][1] = -1;
+    expect(mapFileSchema.safeParse(negativeBrush).success).toBe(false);
+  });
+
+  it('크기를 바꿔도 음수 오브젝트 ID가 유지된다', () => {
+    const doc = createDoc(7, 7);
+    getLayer(doc, 'entity').object[cellIndex(3, 3, 7)] = -42;
+    const bigger = resizeDoc(doc, 11, 11);
+    expect(getLayer(bigger, 'entity').object[cellIndex(5, 5, 11)]).toBe(-42);
+  });
 });
 
 describe('맵 크기 (4n+3 강제)', () => {
@@ -419,9 +489,14 @@ describe('브러쉬 설정', () => {
     expect(normalizeDraft(draft).allowedCellKinds).toEqual(['floor']);
   });
 
-  it('오브젝트 ID는 0 이상의 정수로 맞춘다', () => {
+  it('오브젝트 ID는 정수로 맞추되 음수는 그대로 둔다', () => {
     const { id: _id, ...draft } = makeBrush({ objectIds: { floor: -3, wall: 2.7, pillar: Number.NaN } });
-    expect(normalizeDraft(draft).objectIds).toEqual({ floor: 0, wall: 2, pillar: 0 });
+    expect(normalizeDraft(draft).objectIds).toEqual({ floor: -3, wall: 2, pillar: 0 });
+  });
+
+  it('오브젝트 ID의 소수점은 0 쪽으로 버리고 저장 범위 밖은 자른다', () => {
+    const { id: _id, ...draft } = makeBrush({ objectIds: { floor: -2.7, wall: -3e10, pillar: 3e10 } });
+    expect(normalizeDraft(draft).objectIds).toEqual({ floor: -2, wall: OBJECT_ID_MIN, pillar: OBJECT_ID_MAX });
   });
 
   it('색을 지정하지 않으면 이름에서 자동으로 정해진다', () => {
@@ -457,6 +532,60 @@ describe('브러쉬 설정', () => {
     const floor = defaultBrushes().find((b) => b.name === '바닥')!;
     expect(floor.fillable).toBe(true);
     expect(floor.terrainType).toBe(TERRAIN_EMPTY);
+  });
+});
+
+describe('reorderBrushes (팔레트 순서 변경)', () => {
+  const names = (bs: Brush[]) => bs.map((b) => b.name);
+
+  function set(): Brush[] {
+    return [
+      makeBrush({ id: 1, name: 'A', group: '지형' }),
+      makeBrush({ id: 2, name: 'B', group: '지형' }),
+      makeBrush({ id: 3, name: 'C', group: '지형' }),
+      makeBrush({ id: 4, name: 'X', group: '엔티티' }),
+      makeBrush({ id: 5, name: 'Y', group: '엔티티' }),
+    ];
+  }
+
+  it('같은 그룹 안에서 다른 브러쉬 앞으로 옮긴다', () => {
+    const out = reorderBrushes(set(), 3, '지형', 1); // C를 A 앞으로
+    expect(names(out)).toEqual(['C', 'A', 'B', 'X', 'Y']);
+    expect(out.every((b) => (b.name === 'C' ? b.group === '지형' : true))).toBe(true);
+  });
+
+  it('beforeId가 null이면 그 그룹의 끝으로 옮긴다', () => {
+    const out = reorderBrushes(set(), 1, '지형', null); // A를 지형 그룹 끝으로
+    expect(names(out)).toEqual(['B', 'C', 'A', 'X', 'Y']);
+  });
+
+  it('다른 그룹으로 옮기면 group도 그 그룹으로 바뀐다', () => {
+    const out = reorderBrushes(set(), 2, '엔티티', 5); // B를 Y 앞(엔티티)으로
+    expect(names(out)).toEqual(['A', 'C', 'X', 'B', 'Y']);
+    expect(out.find((b) => b.name === 'B')!.group).toBe('엔티티');
+  });
+
+  it('다른 그룹 끝으로 옮긴다 (beforeId null)', () => {
+    const out = reorderBrushes(set(), 1, '엔티티', null);
+    expect(names(out)).toEqual(['B', 'C', 'X', 'Y', 'A']);
+    expect(out.find((b) => b.name === 'A')!.group).toBe('엔티티');
+  });
+
+  it('제자리에 놓으면 원본 배열을 그대로 돌려준다', () => {
+    const input = set();
+    expect(reorderBrushes(input, 2, '지형', 3)).toBe(input); // B를 C(바로 뒤 항목) 앞 = 제자리
+    expect(reorderBrushes(input, 2, '지형', 2)).toBe(input); // 자기 앞
+  });
+
+  it('없는 브러쉬 id면 원본을 그대로 돌려준다', () => {
+    const input = set();
+    expect(reorderBrushes(input, 999, '지형', 1)).toBe(input);
+  });
+
+  it('새 그룹으로 옮기면 배열 맨 끝에 붙는다', () => {
+    const out = reorderBrushes(set(), 3, '장식', null);
+    expect(names(out)).toEqual(['A', 'B', 'X', 'Y', 'C']);
+    expect(out.find((b) => b.name === 'C')!.group).toBe('장식');
   });
 });
 
@@ -691,6 +820,138 @@ describe('sameGrid', () => {
   });
 });
 
+describe('computeBrushResync (브러쉬 설정 변경을 이미 칠해진 칸에 반영)', () => {
+  /** editorStore.writeBrushCell과 같은 순서로 한 칸을 "칠한다". */
+  function paintTerrainCell(doc: MapDoc, stroke: Stroke, brush: Brush, x: number, y: number): void {
+    write(doc, stroke, 'terrainType', x, y, brush.terrainType);
+    write(doc, stroke, 'terrainObject', x, y, objectIdFor(brush, cellKind(doc, x, y)));
+    write(doc, stroke, 'terrainBrush', x, y, brush.id);
+  }
+
+  function paintEntityCell(doc: MapDoc, stroke: Stroke, brush: Brush, x: number, y: number): void {
+    write(doc, stroke, 'entityObject', x, y, objectIdFor(brush, cellKind(doc, x, y)));
+    write(doc, stroke, 'entityBrush', x, y, brush.id);
+  }
+
+  it('오브젝트 ID를 바꾸면 이미 칠해진 칸의 object 값이 새 값으로 바뀐다', () => {
+    const doc = createDoc(11, 11);
+    const stroke: Stroke = { label: 'paint', changes: [] };
+    const original = makeBrush({ id: 5, terrainType: TERRAIN_WALL, objectIds: sameObjectIdForAll(1) });
+    paintTerrainCell(doc, stroke, original, 5, 6); // wall 칸
+
+    const updated = { ...original, objectIds: sameObjectIdForAll(9) };
+    const changes = computeBrushResync(doc, updated);
+
+    const index = cellIndex(5, 6, 11);
+    expect(changes).toContainEqual({ grid: 'terrainObject', index, before: 1, after: 9 });
+  });
+
+  it('지형 타입을 바꾸면 이미 칠해진 칸의 terrainType도 함께 바뀐다', () => {
+    const doc = createDoc(11, 11);
+    const stroke: Stroke = { label: 'paint', changes: [] };
+    const original = makeBrush({ id: 5, terrainType: TERRAIN_WALL, objectIds: sameObjectIdForAll(1) });
+    paintTerrainCell(doc, stroke, original, 5, 6);
+
+    const updated: Brush = { ...original, terrainType: TERRAIN_EMPTY };
+    const changes = computeBrushResync(doc, updated);
+
+    const index = cellIndex(5, 6, 11);
+    expect(changes).toContainEqual({ grid: 'terrainType', index, before: TERRAIN_WALL, after: TERRAIN_EMPTY });
+  });
+
+  it('칸 종류에 따라 다른 오브젝트 ID를 쓰는 브러쉬는 칸마다 알맞은 값으로 다시 계산된다', () => {
+    const doc = createDoc(11, 11);
+    const stroke: Stroke = { label: 'paint', changes: [] };
+    const original = makeBrush({
+      id: 5,
+      terrainType: TERRAIN_WALL,
+      objectIds: { floor: 1, wall: 2, pillar: 3 },
+    });
+    // (5,5) floor, (5,6) wall, (6,6) pillar — 셋 다 이 브러쉬로 칠한다.
+    paintTerrainCell(doc, stroke, original, 5, 5);
+    paintTerrainCell(doc, stroke, original, 5, 6);
+    paintTerrainCell(doc, stroke, original, 6, 6);
+
+    const updated = { ...original, objectIds: { floor: 10, wall: 20, pillar: 30 } };
+    const changes = computeBrushResync(doc, updated);
+
+    expect(changes).toContainEqual({ grid: 'terrainObject', index: cellIndex(5, 5, 11), before: 1, after: 10 });
+    expect(changes).toContainEqual({ grid: 'terrainObject', index: cellIndex(5, 6, 11), before: 2, after: 20 });
+    expect(changes).toContainEqual({ grid: 'terrainObject', index: cellIndex(6, 6, 11), before: 3, after: 30 });
+  });
+
+  it('다른 브러쉬로 칠해진 칸은 건드리지 않는다', () => {
+    const doc = createDoc(11, 11);
+    const stroke: Stroke = { label: 'paint', changes: [] };
+    const a = makeBrush({ id: 5, terrainType: TERRAIN_WALL, objectIds: sameObjectIdForAll(1) });
+    const b = makeBrush({ id: 6, terrainType: TERRAIN_WALL, objectIds: sameObjectIdForAll(1) });
+    paintTerrainCell(doc, stroke, a, 5, 6);
+    paintTerrainCell(doc, stroke, b, 6, 5);
+
+    const updatedA = { ...a, objectIds: sameObjectIdForAll(9) };
+    const changes = computeBrushResync(doc, updatedA);
+
+    expect(changes.some((c) => c.index === cellIndex(6, 5, 11))).toBe(false);
+  });
+
+  it('entity 브러쉬는 object만 다시 계산되고 terrainType은 건드리지 않는다', () => {
+    const doc = createDoc(11, 11);
+    const stroke: Stroke = { label: 'paint', changes: [] };
+    write(doc, stroke, 'terrainType', 5, 5, TERRAIN_EMPTY);
+    const original = makeBrush({ id: 5, layer: 'entity', terrainType: TERRAIN_NONE, objectIds: sameObjectIdForAll(1) });
+    paintEntityCell(doc, stroke, original, 5, 5);
+
+    const updated = { ...original, objectIds: sameObjectIdForAll(9) };
+    const changes = computeBrushResync(doc, updated);
+
+    expect(changes).toEqual([
+      { grid: 'entityObject', index: cellIndex(5, 5, 11), before: 1, after: 9 },
+    ]);
+  });
+
+  it('브러쉬 레이어를 terrain에서 entity로 바꿔도, 예전에 칠한 terrain 칸의 terrainType은 건드리지 않는다', () => {
+    const doc = createDoc(11, 11);
+    const stroke: Stroke = { label: 'paint', changes: [] };
+    const original = makeBrush({ id: 5, layer: 'terrain', terrainType: TERRAIN_WALL, objectIds: sameObjectIdForAll(1) });
+    paintTerrainCell(doc, stroke, original, 5, 6);
+
+    // normalizeDraft라면 entity 레이어 전환 시 terrainType을 None으로 강제하지만,
+    // 여기서는 resync 쪽이 그 값을 그대로 따라가지 않는지만 본다.
+    const updated: Brush = { ...original, layer: 'entity', terrainType: TERRAIN_NONE, objectIds: sameObjectIdForAll(9) };
+    const changes = computeBrushResync(doc, updated);
+
+    const index = cellIndex(5, 6, 11);
+    expect(changes).toContainEqual({ grid: 'terrainObject', index, before: 1, after: 9 });
+    expect(changes.some((c) => c.grid === 'terrainType')).toBe(false);
+  });
+
+  it('덩어리 브러쉬는 가운데 칸만 다시 계산된다', () => {
+    const doc = createDoc(11, 11);
+    const stroke: Stroke = { label: 'paint', changes: [] };
+    const original = makeBrush({ id: 5, terrainType: TERRAIN_WALL, blob: true, objectIds: sameObjectIdForAll(1) });
+    // 가운데 칸은 브러쉬 id가 남지만, 몸통 칸은 0으로 남는다 (core/tools/place.ts 참고).
+    paintTerrainCell(doc, stroke, original, 5, 5);
+    write(doc, stroke, 'terrainType', 5, 6, original.terrainType);
+    write(doc, stroke, 'terrainObject', 5, 6, 0);
+    write(doc, stroke, 'terrainBrush', 5, 6, 0);
+
+    const updated: Brush = { ...original, terrainType: TERRAIN_EMPTY, objectIds: sameObjectIdForAll(9) };
+    const changes = computeBrushResync(doc, updated);
+
+    expect(changes.some((c) => c.index === cellIndex(5, 5, 11))).toBe(true);
+    expect(changes.some((c) => c.index === cellIndex(5, 6, 11))).toBe(false);
+  });
+
+  it('바뀐 값이 실제로 없으면 빈 배열을 돌려준다', () => {
+    const doc = createDoc(11, 11);
+    const stroke: Stroke = { label: 'paint', changes: [] };
+    const brush = makeBrush({ id: 5, terrainType: TERRAIN_WALL, objectIds: sameObjectIdForAll(1) });
+    paintTerrainCell(doc, stroke, brush, 5, 6);
+
+    expect(computeBrushResync(doc, brush)).toEqual([]);
+  });
+});
+
 describe('generateMazePreview (미로 생성 미리보기)', () => {
   function placeEntityBrush(doc: MapDoc, brush: Brush, x: number, y: number): void {
     const i = cellIndex(x, y, doc.width);
@@ -812,5 +1073,197 @@ describe('generateMazePreview (미로 생성 미리보기)', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
     const separate = generateMazePreview(doc, [seedA, seedB]);
     expect(reachableViaEmpty(separate.terrainType, 11, 11, from, to)).toBe(false);
+  });
+});
+
+describe('layout3d (칸 종류별 3D 크기)', () => {
+  it('칸 종류에 따라 가로·세로 길이가 정해진다', () => {
+    const doc = createDoc(11, 11);
+    const center = centerCell(doc);
+    const spanOf = (x: number, y: number) => [cellSpan(doc, 'x', x), cellSpan(doc, 'y', y)];
+
+    // floor 16.5 × 16.5, wall 16.5 × 3 또는 3 × 16.5, pillar 3 × 3
+    expect(cellKind(doc, center.x, center.y)).toBe('floor');
+    expect(spanOf(center.x, center.y)).toEqual([FLOOR_SPAN, FLOOR_SPAN]);
+
+    expect(cellKind(doc, center.x, center.y + 1)).toBe('wall');
+    expect(spanOf(center.x, center.y + 1)).toEqual([FLOOR_SPAN, WALL_SPAN]);
+
+    expect(cellKind(doc, center.x + 1, center.y)).toBe('wall');
+    expect(spanOf(center.x + 1, center.y)).toEqual([WALL_SPAN, FLOOR_SPAN]);
+
+    expect(cellKind(doc, center.x + 1, center.y + 1)).toBe('pillar');
+    expect(spanOf(center.x + 1, center.y + 1)).toEqual([WALL_SPAN, WALL_SPAN]);
+  });
+
+  it('맵 전체 길이는 floor 열·행 수와 나머지 열·행 수의 합이다', () => {
+    const doc = createDoc(7, 11);
+    const layout = mapLayout3D(doc);
+
+    // 7칸(중앙 3)이면 floor 열은 1,3,5 세 개, 나머지 네 개다.
+    expect(layout.totalX).toBeCloseTo(3 * FLOOR_SPAN + 4 * WALL_SPAN);
+    // 11칸(중앙 5)이면 floor 행은 1,3,5,7,9 다섯 개, 나머지 여섯 개다.
+    expect(layout.totalZ).toBeCloseTo(5 * FLOOR_SPAN + 6 * WALL_SPAN);
+  });
+
+  it('맵 중앙이 원점에 오고 칸 경계가 빈틈없이 이어진다', () => {
+    const doc = createDoc(11, 7);
+    const layout = mapLayout3D(doc);
+
+    expect(layout.xEdges[0]).toBeCloseTo(-layout.totalX / 2);
+    expect(layout.xEdges[doc.width]).toBeCloseTo(layout.totalX / 2);
+    expect(layout.zEdges[0]).toBeCloseTo(-layout.totalZ / 2);
+    expect(layout.zEdges[doc.height]).toBeCloseTo(layout.totalZ / 2);
+
+    for (let x = 0; x < doc.width; x++) {
+      expect(layout.xEdges[x + 1] - layout.xEdges[x]).toBeCloseTo(cellSpan(doc, 'x', x));
+    }
+
+    // 가운데 floor 칸은 원점을 중심으로 놓인다.
+    const center = centerCell(doc);
+    const box = cellBox3D(layout, center.x, center.y);
+    expect(box.cx).toBeCloseTo(0);
+    expect(box.cz).toBeCloseTo(0);
+    expect(box.sx).toBeCloseTo(FLOOR_SPAN);
+    expect(box.sz).toBeCloseTo(FLOOR_SPAN);
+  });
+
+  it('벽 상자는 Wall 칸에만, 칸 크기 그대로 만들어진다', () => {
+    const doc = createDoc(11, 11);
+    const layout = mapLayout3D(doc);
+    const terrainType = new Uint8Array(doc.width * doc.height);
+    const center = centerCell(doc);
+    // 중앙 floor의 오른쪽 wall 칸 하나만 벽으로 둔다.
+    terrainType[cellIndex(center.x + 1, center.y, doc.width)] = TERRAIN_WALL;
+    terrainType[cellIndex(center.x, center.y, doc.width)] = TERRAIN_EMPTY;
+
+    const walls = collectPreview(doc, terrainType, layout).walls;
+
+    expect(walls).toHaveLength(1);
+    const [wall] = walls;
+    expect(wall.sx).toBeCloseTo(WALL_SPAN);
+    expect(wall.sz).toBeCloseTo(FLOOR_SPAN);
+    expect(wall.cx).toBeCloseTo((FLOOR_SPAN + WALL_SPAN) / 2);
+    expect(wall.cz).toBeCloseTo(0);
+    // 모델을 지정하지 않았으면 기본 벽 높이다.
+    expect(wall.model).toBe('default');
+    expect(wall.height).toBe(WALL_HEIGHT);
+    expect(WALL_HEIGHT).toBe(7.4);
+  });
+
+  it('미로 생성 미리보기 결과를 그대로 벽 상자로 옮길 수 있다', () => {
+    const doc = createDoc(11, 11);
+    const seed = makeBrush({ id: 1, layer: 'entity', entityType: 'seed' });
+    getLayer(doc, 'entity').brush[cellIndex(5, 5, doc.width)] = seed.id;
+    const preview = generateMazePreview(doc, [seed]).terrainType;
+    const layout = mapLayout3D(doc);
+
+    let wallCells = 0;
+    for (let i = 0; i < preview.length; i++) if (preview[i] === TERRAIN_WALL) wallCells++;
+
+    expect(collectPreview(doc, preview, layout).walls).toHaveLength(wallCells);
+    expect(wallCells).toBeGreaterThan(0);
+  });
+});
+
+describe('3D 미리보기 모델 타입', () => {
+  it('모델마다 정해진 벽 높이를 돌려준다', () => {
+    expect(wallHeightOf('default')).toBe(WALL_HEIGHT);
+    expect(wallHeightOf('special-wall')).toBe(SPECIAL_WALL_HEIGHT);
+    expect(wallHeightOf('special-wall')).toBe(11.1);
+    // 문은 특수지역 벽과 같은 높이다.
+    expect(wallHeightOf('special-door')).toBe(SPECIAL_WALL_HEIGHT);
+    expect(wallHeightOf('outer-wall')).toBe(OUTER_WALL_HEIGHT);
+    expect(wallHeightOf('outer-wall')).toBe(22.5);
+    // 지역 계열은 벽이 아니다.
+    expect(wallHeightOf('start-area')).toBeNull();
+    expect(wallHeightOf('safe-area')).toBeNull();
+    expect(wallHeightOf('boss-area')).toBeNull();
+    expect(wallHeightOf('monster')).toBeNull();
+    expect(wallHeightOf('golem')).toBeNull();
+    expect(wallHeightOf('plant')).toBeNull();
+  });
+
+  it('지역 계열과 몬스터들만 장식물로 분류한다', () => {
+    expect(isPropModel('start-area')).toBe(true);
+    expect(isPropModel('safe-area')).toBe(true);
+    expect(isPropModel('boss-area')).toBe(true);
+    expect(isPropModel('monster')).toBe(true);
+    expect(isPropModel('golem')).toBe(true);
+    expect(isPropModel('plant')).toBe(true);
+    expect(isPropModel('default')).toBe(false);
+    expect(isPropModel('special-wall')).toBe(false);
+    expect(isPropModel('special-door')).toBe(false);
+    expect(isPropModel('outer-wall')).toBe(false);
+  });
+
+  it('브러쉬가 지정한 모델대로 벽 높이가 정해진다', () => {
+    const doc = createDoc(11, 11);
+    const layout = mapLayout3D(doc);
+    const outer = makeBrush({ id: 2, previewModel: 'outer-wall' });
+    const terrainType = new Uint8Array(doc.width * doc.height);
+
+    const plain = cellIndex(6, 5, doc.width);
+    const tall = cellIndex(5, 6, doc.width);
+    terrainType[plain] = TERRAIN_WALL;
+    terrainType[tall] = TERRAIN_WALL;
+    getLayer(doc, 'terrain').brush[tall] = outer.id;
+
+    const { walls } = collectPreview(doc, terrainType, layout, [outer]);
+    expect(walls).toHaveLength(2);
+    expect(walls.find((w) => w.model === 'outer-wall')?.height).toBe(OUTER_WALL_HEIGHT);
+    expect(walls.find((w) => w.model === 'default')?.height).toBe(WALL_HEIGHT);
+  });
+
+  it('지역 장식물은 지나갈 수 있는 칸에만, 칸 가운데에 하나 선다', () => {
+    const doc = createDoc(11, 11);
+    const layout = mapLayout3D(doc);
+    const tree = makeBrush({ id: 3, layer: 'entity', previewModel: 'safe-area' });
+    const terrainType = new Uint8Array(doc.width * doc.height);
+
+    const center = cellIndex(5, 5, doc.width);
+    terrainType[center] = TERRAIN_EMPTY;
+    getLayer(doc, 'entity').brush[center] = tree.id;
+
+    const { props, walls } = collectPreview(doc, terrainType, layout, [tree]);
+    expect(walls).toHaveLength(0);
+    expect(props).toHaveLength(1);
+    expect(props[0].model).toBe('safe-area');
+    // 중앙 floor 칸이므로 원점에 선다.
+    expect(props[0].cx).toBeCloseTo(0);
+    expect(props[0].cz).toBeCloseTo(0);
+  });
+
+  it('미로 생성기가 뚫어 버린 칸에는 특수 벽을 세우지 않는다', () => {
+    const doc = createDoc(11, 11);
+    const layout = mapLayout3D(doc);
+    const special = makeBrush({ id: 4, previewModel: 'special-wall' });
+    const terrainType = new Uint8Array(doc.width * doc.height);
+
+    const carved = cellIndex(6, 5, doc.width);
+    // 브러쉬로는 특수 벽을 칠해 뒀지만 미리보기에서는 통로가 되었다.
+    getLayer(doc, 'terrain').brush[carved] = special.id;
+    terrainType[carved] = TERRAIN_EMPTY;
+
+    const { walls, props } = collectPreview(doc, terrainType, layout, [special]);
+    expect(walls).toHaveLength(0);
+    expect(props).toHaveLength(0);
+  });
+
+  it('벽 칸에 놓인 지역 장식물은 무시된다', () => {
+    const doc = createDoc(11, 11);
+    const layout = mapLayout3D(doc);
+    const boss = makeBrush({ id: 5, layer: 'entity', previewModel: 'boss-area' });
+    const terrainType = new Uint8Array(doc.width * doc.height);
+
+    const blocked = cellIndex(6, 5, doc.width);
+    getLayer(doc, 'entity').brush[blocked] = boss.id;
+    terrainType[blocked] = TERRAIN_WALL;
+
+    const { walls, props } = collectPreview(doc, terrainType, layout, [boss]);
+    expect(props).toHaveLength(0);
+    // 벽 계열 모델이 아니므로 기본 벽으로 선다.
+    expect(walls).toHaveLength(1);
+    expect(walls[0].model).toBe('default');
   });
 });

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Brush } from '@/core/brush';
-import { defaultBrushes, newBrushId, normalizeDraft } from '@/core/brush';
+import { PREVIEW_MODELS, defaultBrushes, newBrushId, normalizeDraft } from '@/core/brush';
 
 /**
  * 브러쉬 보관.
@@ -11,10 +11,15 @@ import { defaultBrushes, newBrushId, normalizeDraft } from '@/core/brush';
  */
 const KEY = 'maze-editor:brushes:v1';
 const FORMAT = 'maze-editor-brushes';
-const FORMAT_VERSION = 3;
+const FORMAT_VERSION = 4;
 
 const cellKindSchema = z.enum(['floor', 'wall', 'pillar']);
-const objectIdSchema = z.number().int().min(0);
+/**
+ * 오브젝트 ID는 음수도 쓴다. 정수 여부와 범위는 여기서 막지 않는다 — 값 하나 때문에
+ * 브러쉬 파일 전체를 거부하지 않고, normalizeDraft(sanitizeObjectId)가 맵에
+ * 들어가는 정수로 맞춰 주게 하기 위해서다.
+ */
+const objectIdSchema = z.number();
 
 const brushSchema = z.object({
   id: z.number().int().min(1),
@@ -30,6 +35,23 @@ const brushSchema = z.object({
   blob: z.boolean(),
   fillable: z.boolean(),
   color: z.string().nullable(),
+  /**
+   * v4에서 추가.
+   *
+   * 맵 파일과 달리 여기서는 구버전을 잘라내지 않고 기본값을 채운다. 순수하게
+   * 덧붙인 항목이라 "없음"의 뜻이 분명하고(= 기본 모델), 브러쉬 파일을 못 읽으면
+   * loadBrushes가 사용자의 브러쉬 세트를 통째로 버리고 기본 세트로 되돌아가기
+   * 때문이다. 잃을 게 큰 데 비해 얻는 게 없다.
+   *
+   * 모르는 값도 같은 이유로 튕기지 않고 기본 모델로 받는다 — 3D 미리보기에만
+   * 쓰이는 값 하나 때문에 브러쉬 세트 전체를 잃을 이유가 없고, 나중 버전에서
+   * 모델이 늘어나도 예전 에디터가 그 파일을 열 수 있다.
+   *
+   * 그래서 모델 종류를 늘릴 때(예: monster)는 FORMAT_VERSION을 올리지 않는다.
+   * 올리면 위 version 상한 검사에 걸려 예전 에디터가 파일을 통째로 거부하게 되어,
+   * 여기서 .catch로 지키려던 호환성이 오히려 깨진다.
+   */
+  previewModel: z.enum(PREVIEW_MODELS).catch('default'),
 });
 
 const brushFileSchema = z.object({
