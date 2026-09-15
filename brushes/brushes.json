@@ -1045,6 +1045,204 @@
       "fillable": false,
       "color": null,
       "previewModel": "plant"
+    },
+    {
+      "id": 56,
+      "name": "피의 제단",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 57,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#854242",
+      "previewModel": "default"
+    },
+    {
+      "id": 57,
+      "name": "룬의 비석",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 58,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#8d4444",
+      "previewModel": "default"
+    },
+    {
+      "id": 58,
+      "name": "악몽의 석상",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 59,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#803c3c",
+      "previewModel": "default"
+    },
+    {
+      "id": 59,
+      "name": "의문의 보물 상자",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 60,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#833f3f",
+      "previewModel": "default"
+    },
+    {
+      "id": 60,
+      "name": "탈출한 요정",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 61,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#7f3d3d",
+      "previewModel": "default"
+    },
+    {
+      "id": 61,
+      "name": "용사의 남겨진 혼",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 62,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#824040",
+      "previewModel": "default"
+    },
+    {
+      "id": 62,
+      "name": "강제 귀환 장치",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 63,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#843e3e",
+      "previewModel": "default"
+    },
+    {
+      "id": 63,
+      "name": "늑대 정예",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 64,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#7e3a3a",
+      "previewModel": "default"
+    },
+    {
+      "id": 64,
+      "name": "골렘 정예",
+      "group": "숲 지형",
+      "layer": "terrain",
+      "terrainType": 0,
+      "entityType": null,
+      "allowedCellKinds": [
+        "floor"
+      ],
+      "objectIds": {
+        "floor": 65,
+        "wall": 0,
+        "pillar": 0
+      },
+      "unique": false,
+      "size": 1,
+      "blob": false,
+      "fillable": false,
+      "color": "#803c3c",
+      "previewModel": "default"
     }
   ]
 }
